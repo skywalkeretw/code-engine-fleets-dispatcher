@@ -1,0 +1,37 @@
+[
+  {
+    "id": "docling-pdf",
+    "name": "Docling — PDF to Markdown",
+    "description": "Converts PDF files to Markdown using the Docling image. {{mount.fleet-input-store}} and {{mount.fleet-output-store}} resolve to the fleet's configured mount paths.",
+    "idx": "{{filename}}",
+    "cmds": ["docling"],
+    "args": [
+      "--num-threads", "12",
+      "{{mount.fleet-input-store}}/{{relPath}}",
+      "--output", "{{mount.fleet-output-store}}/{{stem}}.md"
+    ]
+  },
+  {
+    "id": "wordcount",
+    "name": "Word Count (wc)",
+    "description": "Runs wc on each text file. Mount placeholder resolves to the fleet's input store mount path.",
+    "idx": "",
+    "cmds": ["/bin/bash"],
+    "args": [
+      "-c",
+      "wc {{mount.fleet-input-store}}/{{relPath}} > {{mount.fleet-output-store}}/wordcount_{{filename}}"
+    ]
+  },
+  {
+    "id": "batch-inferencing",
+    "name": "Batch LLM Inferencing",
+    "description": "Runs batch inferencing using a custom inferencing container.",
+    "idx": "{{filename}}",
+    "cmds": ["python"],
+    "args": [
+      "app.py",
+      "--input", "{{mount.fleet-input-store}}/{{relPath}}",
+      "--output", "{{mount.fleet-output-store}}/{{stem}}_result.json"
+    ]
+  }
+]

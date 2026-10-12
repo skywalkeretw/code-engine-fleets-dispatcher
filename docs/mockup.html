@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fleets Dispatcher — UI Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --cds-interactive:        #0f62fe;
+  --cds-interactive-hover:  #0043ce;
+  --cds-support-success:    #24a148;
+  --cds-support-error:      #da1e28;
+  --cds-background:         #f4f4f4;
+  --cds-layer-01:           #ffffff;
+  --cds-layer-02:           #f4f4f4;
+  --cds-layer-hover-01:     #e8e8e8;
+  --cds-layer-selected-01:  #e0e0e0;
+  --cds-layer-accent-01:    #e0e0e0;
+  --cds-shell-header-bg:    #161616;
+  --cds-text-primary:       #161616;
+  --cds-text-secondary:     #525252;
+  --cds-text-disabled:      #c6c6c6;
+  --cds-text-helper:        #6f6f6f;
+  --cds-border-subtle-01:   #e0e0e0;
+  --cds-border-strong-01:   #8d8d8d;
+  --cds-border-interactive: #0f62fe;
+  --cds-tag-green-bg:       #defbe6;
+  --cds-tag-green-text:     #0e6027;
+  --cds-tag-blue-bg:        #edf5ff;
+  --cds-tag-blue-text:      #0043ce;
+  --cds-tag-gray-bg:        #e0e0e0;
+  --cds-tag-gray-text:      #393939;
+  --cds-tag-teal-bg:        #d9fbfb;
+  --cds-tag-teal-text:      #005d5d;
+  --cds-notification-success-bg:     #defbe6;
+  --cds-notification-success-border: #24a148;
+  --sp-03: 8px; --sp-04: 12px; --sp-05: 16px; --sp-06: 24px; --sp-07: 32px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; background: var(--cds-background); color: var(--cds-text-primary); min-height: 100vh; }
+
+/* ── Header ── */
+.cds--header { background: var(--cds-shell-header-bg); height: 48px; display: flex; align-items: center; padding: 0 16px; position: sticky; top: 0; z-index: 8000; }
+.cds--header__name { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; font-size: 14px; font-weight: 600; }
+.cds--header__name span { color: #8d8d8d; font-weight: 400; margin-left: 4px; }
+.header-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.header-fleet-pill { display: flex; align-items: center; gap: 8px; background: #262626; border: 1px solid #525252; padding: 6px 14px; cursor: pointer; height: 36px; font-size: 13px; transition: background .15s; }
+.header-fleet-pill:hover { background: #393939; }
+.no-fleet { color: #a8a8a8; font-style: italic; }
+.fleet-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cds-support-success); flex-shrink: 0; }
+
+/* ── Content ── */
+.cds--content { max-width: 960px; margin: 0 auto; padding: 24px 16px 120px; }
+.page-title { font-size: 26px; font-weight: 300; margin-bottom: 4px; }
+.page-subtitle { font-size: 13px; color: var(--cds-text-secondary); margin-bottom: 24px; }
+
+/* ── Fleet-first overlay ── */
+.fleet-gate {
+  position: fixed; inset: 0; z-index: 7500;
+  background: rgba(244,244,244,.96);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  text-align: center; padding: 32px;
+}
+.fleet-gate.hidden { display: none; }
+.fleet-gate__icon { font-size: 48px; }
+.fleet-gate__title { font-size: 22px; font-weight: 300; }
+.fleet-gate__sub { font-size: 14px; color: var(--cds-text-secondary); max-width: 420px; }
+
+/* ── Section accordion ── */
+.section-card { background: var(--cds-layer-01); border: 1px solid var(--cds-border-subtle-01); margin-bottom: 12px; }
+.section-header { width: 100%; background: none; border: none; cursor: pointer; padding: 0 16px; display: flex; align-items: center; gap: 12px; height: 52px; text-align: left; user-select: none; border-bottom: 1px solid transparent; transition: background .15s; }
+.section-header:hover { background: var(--cds-layer-02); }
+.section-card.open .section-header { border-bottom: 1px solid var(--cds-border-subtle-01); }
+.section-num { width: 24px; height: 24px; border-radius: 50%; background: var(--cds-layer-selected-01); color: var(--cds-text-secondary); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.section-card.done .section-num { background: var(--cds-support-success); color: #fff; }
+.section-card.done .section-num::after { content: '✓'; }
+.section-card.done .section-num span { display: none; }
+.section-title { font-size: 15px; font-weight: 600; flex: 1; }
+.section-meta { font-size: 12px; color: var(--cds-text-helper); }
+.section-arrow { color: var(--cds-text-secondary); font-size: 12px; transition: transform .2s; margin-left: 8px; }
+.section-card.open .section-arrow { transform: rotate(180deg); }
+.section-body { display: none; padding: 24px 16px; }
+.section-card.open .section-body { display: block; }
+
+/* ── Forms ── */
+.cds--form-item { margin-bottom: 16px; }
+.cds--form-item label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.cds--label { font-size: 12px; font-weight: 600; color: var(--cds-text-secondary); }
+.cds--text-input { width: 100%; height: 40px; padding: 0 12px; border: none; border-bottom: 1px solid var(--cds-border-strong-01); background: var(--cds-layer-02); font-family: inherit; font-size: 14px; outline: none; }
+.cds--text-input:focus { border-bottom: 2px solid var(--cds-border-interactive); }
+.cds--select { height: 40px; padding: 0 12px; border: none; border-bottom: 1px solid var(--cds-border-strong-01); background: var(--cds-layer-02); font-family: inherit; font-size: 14px; outline: none; cursor: pointer; }
+.form-row { display: flex; gap: 16px; align-items: flex-start; }
+.text-helper { color: var(--cds-text-helper); font-size: 12px; }
+.section-divider { border: none; border-top: 1px solid var(--cds-border-subtle-01); margin: 16px 0; }
+
+/* ── Buttons ── */
+.cds--btn { display: inline-flex; align-items: center; gap: 6px; border: none; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 600; padding: 0 16px; height: 48px; transition: background .15s; }
+.cds--btn--primary   { background: var(--cds-interactive); color: #fff; }
+.cds--btn--primary:hover { background: var(--cds-interactive-hover); }
+.cds--btn--primary:disabled { background: var(--cds-layer-accent-01); color: var(--cds-text-disabled); cursor: not-allowed; }
+.cds--btn--secondary { background: #393939; color: #fff; }
+.cds--btn--secondary:hover { background: #474747; }
+.cds--btn--tertiary  { background: transparent; color: var(--cds-interactive); border: 1px solid var(--cds-interactive); }
+.cds--btn--tertiary:hover { background: #e8f0fe; }
+.cds--btn--ghost     { background: transparent; color: var(--cds-interactive); }
+.cds--btn--ghost:hover { background: var(--cds-layer-hover-01); }
+.cds--btn--md { height: 40px; }
+.cds--btn--sm { height: 32px; font-size: 12px; padding: 0 12px; }
+.cds--btn--icon-only { width: 32px; padding: 0; justify-content: center; }
+.btn-set { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── Tags ── */
+.cds--tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; border-radius: 2px; }
+.cds--tag--green { background: var(--cds-tag-green-bg); color: var(--cds-tag-green-text); }
+.cds--tag--blue  { background: var(--cds-tag-blue-bg);  color: var(--cds-tag-blue-text); }
+.cds--tag--gray  { background: var(--cds-tag-gray-bg);  color: var(--cds-tag-gray-text); }
+.cds--tag--teal  { background: var(--cds-tag-teal-bg);  color: var(--cds-tag-teal-text); }
+
+/* ── Data table ── */
+.cds--data-table-container { overflow-x: auto; }
+.cds--data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cds--data-table thead th { background: var(--cds-layer-02); padding: 10px 12px; text-align: left; font-size: 12px; font-weight: 600; border-bottom: 1px solid var(--cds-border-subtle-01); white-space: nowrap; }
+.cds--data-table tbody td { padding: 8px 12px; border-bottom: 1px solid var(--cds-border-subtle-01); vertical-align: middle; }
+.cds--data-table tbody tr:hover td { background: var(--cds-layer-02); }
+.cds--data-table tbody tr:last-child td { border-bottom: none; }
+
+/* ── Drag-and-drop row list (cmds + args) ── */
+.sortable-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.sort-row { display: flex; align-items: center; gap: 6px; background: var(--cds-layer-02); border: 1px solid var(--cds-border-subtle-01); padding: 4px 6px; cursor: default; }
+.sort-row.drag-over { border-color: var(--cds-interactive); background: #edf5ff; }
+.sort-row.dragging { opacity: .4; }
+.drag-handle { cursor: grab; color: var(--cds-text-helper); font-size: 16px; padding: 0 4px; user-select: none; flex-shrink: 0; }
+.drag-handle:active { cursor: grabbing; }
+
+/* ── Drop zone ── */
+.cds--file-uploader-dropzone { border: 2px dashed var(--cds-border-strong-01); padding: 40px 24px; text-align: center; background: var(--cds-layer-02); cursor: pointer; transition: border-color .15s, background .15s; margin-bottom: 16px; }
+.cds--file-uploader-dropzone.drag, .cds--file-uploader-dropzone:hover { border-color: var(--cds-interactive); background: #edf5ff; }
+.cds--file-uploader-dropzone__icon { font-size: 28px; margin-bottom: 8px; }
+.cds--file-uploader-dropzone p { font-size: 14px; margin-bottom: 6px; }
+.cds--file-uploader-dropzone small { font-size: 12px; color: var(--cds-text-secondary); }
+.dropzone-btn-row { margin-top: 12px; display: flex; gap: 8px; justify-content: center; }
+
+/* ── Placeholder chips ── */
+.placeholder-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0; margin-bottom: 16px; }
+.ph-chip { padding: 4px 10px; font-size: 12px; font-weight: 600; background: var(--cds-tag-blue-bg); color: var(--cds-tag-blue-text); border-radius: 2px; cursor: pointer; border: 1px solid #a8c8ff; font-family: 'IBM Plex Mono', monospace; transition: background .12s; user-select: none; }
+.ph-chip:hover { background: #d0e2ff; }
+.ph-chip-mount { background: #defbe6; color: #044317; border-color: #a7f0ba; }
+.ph-chip-mount:hover { background: #b4f4c5; }
+.ph-chip-tip { font-size: 11px; color: var(--cds-text-helper); align-self: center; }
+
+/* ── Fleet info bar ── */
+.fleet-info-bar { display: flex; flex-wrap: wrap; gap: 16px; background: var(--cds-layer-02); padding: 10px 14px; margin-bottom: 20px; border: 1px solid var(--cds-border-subtle-01); }
+.fi-item { display: flex; flex-direction: column; gap: 2px; }
+.fi-label { font-size: 11px; color: var(--cds-text-helper); text-transform: uppercase; letter-spacing: .5px; }
+.fi-value { font-size: 13px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
+
+/* ── Mount info table ── */
+.mount-info-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+.mount-info-table th { text-align: left; padding: 6px 10px; background: var(--cds-layer-02); border-bottom: 1px solid var(--cds-border-subtle-01); font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--cds-text-secondary); }
+.mount-info-table td { padding: 6px 10px; border-bottom: 1px solid var(--cds-border-subtle-01); font-family: 'IBM Plex Mono', monospace; }
+.mount-info-table tr:last-child td { border-bottom: none; }
+.mount-info-table .path-example { font-size: 11px; color: var(--cds-text-helper); }
+
+/* ── JSONL terminal ── */
+.jsonl-terminal { background: #161616; color: #42be65; font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.7; padding: 16px; overflow-x: auto; overflow-y: auto; border: 1px solid #393939; }
+.jsonl-terminal .jl-key  { color: #82cfff; }
+.jsonl-terminal .jl-str  { color: #42be65; }
+.jsonl-terminal .jl-num  { color: #ff7eb6; }
+.jsonl-terminal .jl-bool { color: #ff7eb6; }
+.jsonl-terminal .jl-more { color: #6f6f6f; font-style: italic; margin-top: 4px; display: block; }
+.terminal-header { background: #262626; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #393939; border-bottom: none; }
+.terminal-header span { font-size: 12px; color: #8d8d8d; }
+
+/* ── Notifications ── */
+.cds--inline-notification { display: flex; gap: 12px; padding: 12px 16px; margin-bottom: 20px; border-left: 3px solid; }
+.cds--inline-notification--success { background: var(--cds-notification-success-bg); border-color: var(--cds-support-success); }
+.cds--inline-notification--info    { background: #edf5ff; border-color: var(--cds-interactive); }
+.cds--inline-notification--warning { background: #fdf6dd; border-color: #f1c21b; }
+.cds--inline-notification__icon    { font-size: 18px; flex-shrink: 0; line-height: 1.4; }
+.cds--inline-notification__content .title { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.cds--inline-notification__content p { font-size: 13px; color: var(--cds-text-secondary); }
+.cds--inline-notification__actions { margin-top: 8px; }
+
+/* ── Checkbox ── */
+.cds--checkbox-wrapper { display: flex; align-items: center; gap: 10px; padding: 12px 0; cursor: pointer; }
+.cds--checkbox { width: 18px; height: 18px; border: 2px solid var(--cds-border-strong-01); display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: #fff; transition: background .15s, border-color .15s; }
+.cds--checkbox.checked { background: var(--cds-interactive); border-color: var(--cds-interactive); }
+.cds--checkbox.checked::after { content: '✓'; color: #fff; font-size: 12px; font-weight: 700; }
+.cds--checkbox-label { font-size: 14px; user-select: none; }
+
+/* ── Spinner / progress ── */
+.spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--cds-border-subtle-01); border-top-color: var(--cds-interactive); animation: spin .8s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Sub-accordion (submit phases) ── */
+.sub-acc__item { border-top: 1px solid var(--cds-border-subtle-01); }
+.sub-acc__item:first-child { border-top: none; }
+.sub-acc__heading { width: 100%; background: none; border: none; cursor: pointer; padding: 12px 0; display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 600; text-align: left; }
+.sub-acc__content { padding: 0 0 16px; }
+.sub-acc__arrow { transition: transform .2s; display: inline-block; color: var(--cds-text-secondary); font-size: 12px; }
+.sub-acc__item.open .sub-acc__arrow { transform: rotate(180deg); }
+.sub-acc__item:not(.open) .sub-acc__content { display: none; }
+
+/* ── Sticky action bar ── */
+.action-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 7000; background: #262626; border-top: 1px solid #525252; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.action-bar-info { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.action-bar-stat { display: flex; flex-direction: column; gap: 1px; }
+.action-bar-stat .stat-label { font-size: 11px; color: #8d8d8d; }
+.action-bar-stat .stat-value { font-size: 13px; font-weight: 600; color: #fff; }
+.action-bar-stat .stat-value.dim { color: #a8a8a8; font-style: italic; }
+
+/* ── Fleet modal ── */
+.cds--modal-overlay { position: fixed; inset: 0; background: rgba(22,22,22,.7); display: none; align-items: center; justify-content: center; z-index: 9000; }
+.cds--modal-overlay.open { display: flex; }
+.cds--modal-container { background: var(--cds-layer-01); width: 100%; max-width: 680px; max-height: 82vh; display: flex; flex-direction: column; box-shadow: 0 12px 40px rgba(0,0,0,.4); }
+.cds--modal-header { padding: 16px; border-bottom: 1px solid var(--cds-border-subtle-01); display: flex; align-items: flex-start; justify-content: space-between; }
+.cds--modal-header__label   { font-size: 12px; color: var(--cds-text-secondary); margin-bottom: 4px; }
+.cds--modal-header__heading { font-size: 20px; font-weight: 300; }
+.cds--modal-close { background: none; border: none; cursor: pointer; font-size: 18px; color: var(--cds-text-secondary); padding: 4px; }
+.cds--modal-body  { flex: 1; overflow-y: auto; padding: 16px; }
+.cds--modal-footer { padding: 12px 16px; border-top: 1px solid var(--cds-border-subtle-01); display: flex; justify-content: flex-end; gap: 8px; }
+.modal-toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.modal-toolbar .cds--text-input, .modal-toolbar .cds--select { flex: 1; min-width: 140px; }
+.fleet-row { padding: 12px; border: 1px solid var(--cds-border-subtle-01); margin-bottom: 6px; cursor: pointer; transition: background .12s; }
+.fleet-row:hover { background: var(--cds-layer-02); }
+.fleet-row.sel   { border-color: var(--cds-interactive); background: #edf5ff; }
+.fleet-row__name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.fleet-row__meta { font-size: 12px; color: var(--cds-text-secondary); }
+.fleet-row__tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.fleet-row__mounts { font-size: 11px; color: var(--cds-text-helper); margin-top: 4px; font-family: 'IBM Plex Mono', monospace; }
+
+/* ── Misc ── */
+.mono { font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+.text-muted { color: var(--cds-text-secondary); }
+.mt-05 { margin-top: 16px; }
+.mt-06 { margin-top: 24px; }
+.hidden { display: none !important; }
+.upload-status-cell { min-width: 140px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="cds--header">
+  <a class="cds--header__name" href="#">
+    <svg width="20" height="20" viewBox="0 0 32 32" fill="white"><path d="M16 2C8.3 2 2 8.3 2 16s6.3 14 14 14 14-6.3 14-14S23.7 2 16 2zm0 2c6.6 0 12 5.4 12 12s-5.4 12-12 12S4 22.6 4 16 9.4 4 16 4zm-1 4v9.6l-3.3-3.3-1.4 1.4L16 21.4l5.7-5.7-1.4-1.4L17 17.6V8h-2z"/></svg>
+    Fleets Dispatcher
+    <span>IBM Code Engine</span>
+  </a>
+  <div class="header-actions">
+    <div class="header-fleet-pill" onclick="openFleetModal()" id="fleet-pill">
+      <span class="no-fleet">Select a fleet…</span>
+    </div>
+  </div>
+</header>
+
+<!-- FLEET-FIRST GATE (shown until a fleet is selected) -->
+<div id="fleet-gate" class="fleet-gate">
+  <div class="fleet-gate__icon">🚢</div>
+  <div class="fleet-gate__title">Select a Fleet to Begin</div>
+  <div class="fleet-gate__sub">Choose which IBM Code Engine standby fleet will run your batch workload. All configuration options unlock once a fleet is selected.</div>
+  <button class="cds--btn cds--btn--primary" onclick="openFleetModal()">Select a fleet…</button>
+</div>
+
+<!-- FLEET MODAL -->
+<div class="cds--modal-overlay" id="fleet-modal">
+  <div class="cds--modal-container">
+    <div class="cds--modal-header">
+      <div>
+        <div class="cds--modal-header__label">IBM Code Engine</div>
+        <div class="cds--modal-header__heading">Select Standby Fleet</div>
+      </div>
+      <button class="cds--modal-close" onclick="closeFleetModal()">✕</button>
+    </div>
+    <div class="cds--modal-body">
+      <div class="modal-toolbar">
+        <input class="cds--text-input" type="text" placeholder="Search by fleet name…" id="fleet-search" oninput="filterFleets()" />
+        <select class="cds--select" id="project-filter" onchange="filterFleets()">
+          <option value="">All projects</option>
+          <option value="fleetlab-user1--ce-project">fleetlab-user1--ce-project</option>
+          <option value="fleetlab-user2--ce-project">fleetlab-user2--ce-project</option>
+          <option value="prod-fleet-project">prod-fleet-project</option>
+        </select>
+        <select class="cds--select" id="region-filter" onchange="filterFleets()">
+          <option value="">All regions</option>
+          <option value="eu-de">eu-de</option>
+          <option value="us-south">us-south</option>
+          <option value="au-syd">au-syd</option>
+        </select>
+      </div>
+      <div id="fleet-rows"></div>
+    </div>
+    <div class="cds--modal-footer">
+      <button class="cds--btn cds--btn--secondary cds--btn--md" onclick="closeFleetModal()">Cancel</button>
+      <button class="cds--btn cds--btn--primary cds--btn--md" id="modal-confirm-btn" disabled onclick="confirmFleet()">Select Fleet</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN CONTENT (hidden behind gate until fleet selected) -->
+<div class="cds--content" id="main-content" style="display:none">
+
+  <div class="page-title">Dispatch a Batch Workload</div>
+  <div class="page-subtitle">Configure your task template, stage files, review the JSONL, then upload &amp; dispatch.</div>
+
+  <!-- ── SECTION 0 — FLEET INFO ── -->
+  <div class="section-card open" id="sec-fleet">
+    <button class="section-header" onclick="toggleSection('sec-fleet')">
+      <div class="section-num done-always" style="background:var(--cds-support-success);color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">✓</div>
+      <div class="section-title">Fleet</div>
+      <div class="section-meta" id="sec-fleet-meta">—</div>
+      <span class="section-arrow">▼</span>
+    </button>
+    <div class="section-body">
+      <div id="fleet-detail-bar" class="fleet-info-bar"></div>
+
+      <!-- Mount points reference table -->
+      <div class="cds--label" style="margin-bottom:8px">Persistent data store mounts on this fleet</div>
+      <p style="font-size:12px;color:var(--cds-text-secondary);margin-bottom:8px">
+        Files are uploaded to COS using the <strong>COS prefix</strong> you configure in the Files section.
+        Inside the task container, the fleet's input store is mounted at a fixed directory — access your
+        uploaded file by combining the mount path + the COS prefix + the filename.<br>
+        <strong>Example:</strong> file uploaded to COS as <code style="background:#e0e0e0;padding:1px 4px">input/batch1/doc.pdf</code>
+        with mount at <code style="background:#e0e0e0;padding:1px 4px">/cos-input</code> →
+        container path <code style="background:#e0e0e0;padding:1px 4px">/cos-input/input/batch1/doc.pdf</code>
+      </p>
+      <table class="mount-info-table" id="mount-table">
+        <thead><tr><th>Store name</th><th>Mount path in container</th><th>{{mount.X}} placeholder</th><th>Example container path (using {{cosPath}})</th></tr></thead>
+        <tbody id="mount-tbody"></tbody>
+      </table>
+
+      <div style="margin-top:16px">
+        <button class="cds--btn cds--btn--ghost cds--btn--sm" onclick="openFleetModal()">Change fleet…</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 1 — TASK TEMPLATE ── -->
+  <div class="section-card open" id="sec-template">
+    <button class="section-header" onclick="toggleSection('sec-template')">
+      <div class="section-num"><span>1</span></div>
+      <div class="section-title">Task Template</div>
+      <div class="section-meta" id="sec-template-meta">Define idx · cmds · args</div>
+      <span class="section-arrow">▼</span>
+    </button>
+    <div class="section-body">
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        <select class="cds--select" id="template-select" onchange="applyPreset(this.value)" style="height:36px;font-size:12px;width:280px">
+          <option value="">— Load a saved template —</option>
+          <option value="empty">Empty template</option>
+          <option value="docling">Docling — PDF to Markdown</option>
+          <option value="wordcount">Word Count (wc)</option>
+          <option value="inferencing">Batch LLM Inferencing</option>
+        </select>
+        <button class="cds--btn cds--btn--ghost cds--btn--sm" onclick="saveTemplateDialog()">💾 Save template</button>
+      </div>
+
+      <p style="font-size:13px;color:var(--cds-text-secondary);margin-bottom:12px">
+        Each JSONL line has up to three optional fields: <strong>idx</strong> (string identifier),
+        <strong>cmds</strong> (executable array), <strong>args</strong> (arguments array).
+        Use <code style="font-family:monospace;background:#e0e0e0;padding:1px 5px">{{placeholder}}</code> tokens in any value.
+        Rows in cmds and args can be reordered by dragging the ⠿ handle.
+      </p>
+
+      <div class="cds--label" style="margin-bottom:6px">Available placeholders — click to copy</div>
+      <div class="placeholder-chips" id="ph-chips">
+        <span class="ph-chip" onclick="copyPh(event,'{{filename}}')">{{filename}}</span>
+        <span class="ph-chip" onclick="copyPh(event,'{{stem}}')">{{stem}}</span>
+        <span class="ph-chip" onclick="copyPh(event,'{{ext}}')">{{ext}}</span>
+        <span class="ph-chip" onclick="copyPh(event,'{{cosPath}}')">{{cosPath}}</span>
+        <span class="ph-chip" onclick="copyPh(event,'{{prefix}}')">{{prefix}}</span>
+        <span class="ph-chip" onclick="copyPh(event,'{{index}}')">{{index}}</span>
+        <span class="ph-chip-tip" id="ph-chips-tip">← select a fleet to see {{mount.X}} chips</span>
+      </div>
+
+      <hr class="section-divider" />
+
+      <!-- idx -->
+      <div class="cds--form-item">
+        <label>idx <span class="text-helper">(optional — task identifier string, supports placeholders)</span></label>
+        <input class="cds--text-input" type="text" id="t-idx"
+               placeholder="leave empty to omit idx from output"
+               oninput="livePreview(); updateTemplateMeta()" />
+      </div>
+
+      <!-- cmds -->
+      <div class="cds--form-item">
+        <label>cmds <span class="text-helper">(optional — executable + fixed subcommands; drag ⠿ to reorder)</span></label>
+        <div class="sortable-list" id="cmds-list"></div>
+        <button class="cds--btn cds--btn--ghost cds--btn--sm" onclick="addCmdRow()">+ Add cmd entry</button>
+      </div>
+
+      <!-- args -->
+      <div class="cds--form-item">
+        <label>args <span class="text-helper">(optional — one entry per row; drag ⠿ to reorder)</span></label>
+        <div class="sortable-list" id="args-list"></div>
+        <button class="cds--btn cds--btn--ghost cds--btn--sm" onclick="addArgRow()">+ Add arg entry</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── SECTION 2 — FILES ── -->
+  <div class="section-card open" id="sec-files">
+    <button class="section-header" onclick="toggleSection('sec-files')">
+      <div class="section-num"><span>2</span></div>
+      <div class="section-title">Files</div>
+      <div class="section-meta" id="sec-files-meta">No files staged</div>
+      <span class="section-arrow">▼</span>
+    </button>
+    <div class="section-body">
+
+      <div class="cds--form-item" style="max-width:520px">
+        <label>COS prefix <span class="text-helper">(the full path prefix where files will be stored in COS, e.g. <code style="background:#e0e0e0;padding:1px 4px">input/batch1/</code>)</span></label>
+        <input class="cds--text-input" type="text" id="cos-prefix" value="input/batch1/"
+               oninput="renderFileTable(); livePreview()" />
+      </div>
+
+      <div class="cds--file-uploader-dropzone" id="dropzone"
+           ondragover="event.preventDefault();this.classList.add('drag')"
+           ondragleave="this.classList.remove('drag')"
+           ondrop="handleDrop(event)">
+        <div class="cds--file-uploader-dropzone__icon">⬆</div>
+        <p><strong>Drag and drop files here</strong></p>
+        <small>Any file type · max 500 MB per file · each file = one JSONL task line</small>
+        <div class="dropzone-btn-row">
+          <button class="cds--btn cds--btn--secondary cds--btn--sm" onclick="loadFiles(MOCK_FILES)">Browse files</button>
+          <button class="cds--btn cds--btn--tertiary cds--btn--sm" onclick="loadFiles(MOCK_FOLDER)">Browse folder</button>
+        </div>
+      </div>
+
+      <div id="file-table-wrap" class="hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span class="cds--label">Staged files (<span id="file-count">0</span>)</span>
+          <button class="cds--btn cds--btn--ghost cds--btn--sm" onclick="clearFiles()">Clear all</button>
+        </div>
+        <div class="cds--data-table-container">
+          <table class="cds--data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Filename</th>
+                <th>Size</th>
+                <th>COS object key <span style="font-weight:400;color:var(--cds-text-helper)">(prefix + filename)</span></th>
+              </tr>
+            </thead>
+            <tbody id="file-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── SECTION 3 — JSONL PREVIEW ── -->
+  <div class="section-card" id="sec-preview">
+    <button class="section-header" onclick="toggleSection('sec-preview')">
+      <div class="section-num"><span>3</span></div>
+      <div class="section-title">JSONL Preview</div>
+      <div class="section-meta" id="sec-preview-meta">Stage files to generate preview</div>
+      <span class="section-arrow">▼</span>
+    </button>
+    <div class="section-body">
+      <p style="font-size:13px;color:var(--cds-text-secondary);margin-bottom:12px">
+        Live preview — showing up to 20 lines. Review carefully before confirming.
+      </p>
+      <div id="preview-empty-msg" style="color:var(--cds-text-secondary);font-size:13px;padding:8px 0">
+        No files staged yet.
+      </div>
+      <div id="preview-content" class="hidden">
+        <div class="terminal-header">
+          <span>tasks.jsonl</span>
+          <span id="preview-line-count">0 tasks</span>
+        </div>
+        <div class="jsonl-terminal" id="jsonl-terminal" style="max-height:420px"></div>
+        <div style="margin-top:16px;padding:12px;background:var(--cds-layer-02);border:1px solid var(--cds-border-subtle-01)">
+          <label class="cds--checkbox-wrapper" onclick="toggleConfirm()">
+            <div class="cds--checkbox" id="confirm-checkbox"></div>
+            <span class="cds--checkbox-label">I have reviewed the task structure and it looks correct</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SECTION 4 — SUBMIT ── -->
+  <div class="section-card" id="sec-submit">
+    <button class="section-header" onclick="toggleSection('sec-submit')">
+      <div class="section-num"><span>4</span></div>
+      <div class="section-title">Submit</div>
+      <div class="section-meta" id="sec-submit-meta">Upload to COS &amp; dispatch fleet</div>
+      <span class="section-arrow">▼</span>
+    </button>
+    <div class="section-body">
+      <div id="fleet-info-bar-submit" class="fleet-info-bar hidden">
+        <div class="fi-item"><span class="fi-label">Fleet</span><span class="fi-value" id="s4-fleet">—</span></div>
+        <div class="fi-item"><span class="fi-label">Region</span><span class="fi-value" id="s4-region">—</span></div>
+        <div class="fi-item"><span class="fi-label">Task State Store</span><span class="fi-value" id="s4-tss">—</span></div>
+        <div class="fi-item"><span class="fi-label">Total Tasks</span><span class="fi-value" id="s4-tasks">—</span></div>
+      </div>
+
+      <div class="sub-acc__item open" id="sacc-cos">
+        <button class="sub-acc__heading" onclick="toggleSubAcc('sacc-cos')">
+          Phase 1 — Upload files to COS <span id="cos-phase-tag" style="margin-left:8px"></span>
+          <span class="sub-acc__arrow">▼</span>
+        </button>
+        <div class="sub-acc__content">
+          <div class="cds--data-table-container">
+            <table class="cds--data-table">
+              <thead><tr><th>File</th><th>COS key</th><th>Size</th><th>Status</th></tr></thead>
+              <tbody id="upload-progress-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-acc__item open" id="sacc-dispatch">
+        <button class="sub-acc__heading" onclick="toggleSubAcc('sacc-dispatch')">
+          Phase 2 — Submit tasks to fleet <span id="dispatch-phase-tag" style="margin-left:8px"></span>
+          <span class="sub-acc__arrow">▼</span>
+        </button>
+        <div class="sub-acc__content">
+          <div id="dispatch-waiting" style="color:var(--cds-text-secondary);font-size:13px;padding:8px 0">
+            Waiting for file uploads to complete…
+          </div>
+          <div id="dispatch-result" class="hidden">
+            <div class="terminal-header" style="margin-top:8px">
+              <span>Submitted JSONL</span>
+              <span id="dispatch-task-count">—</span>
+            </div>
+            <div class="jsonl-terminal" id="dispatch-jsonl-view" style="max-height:200px"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cds--inline-notification cds--inline-notification--success hidden mt-06" id="success-banner">
+        <div class="cds--inline-notification__icon">✅</div>
+        <div class="cds--inline-notification__content">
+          <div class="title">Fleet dispatched successfully!</div>
+          <p>Fleet run <strong id="success-fleet-name">—</strong> is processing <strong id="success-task-count">—</strong> tasks.</p>
+          <div class="cds--inline-notification__actions">
+            <div class="mono" id="success-cmd" style="margin-top:8px;font-size:12px;color:#525252"></div>
+            <button class="cds--btn cds--btn--ghost cds--btn--sm" style="margin-top:12px" onclick="resetAll()">Dispatch another batch</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main-content -->
+
+<!-- STICKY ACTION BAR -->
+<div class="action-bar">
+  <div class="action-bar-info">
+    <div class="action-bar-stat">
+      <span class="stat-label">Fleet</span>
+      <span class="stat-value dim" id="ab-fleet">not selected</span>
+    </div>
+    <div class="action-bar-stat">
+      <span class="stat-label">Files</span>
+      <span class="stat-value" id="ab-files">0</span>
+    </div>
+    <div class="action-bar-stat">
+      <span class="stat-label">Tasks</span>
+      <span class="stat-value" id="ab-tasks">0</span>
+    </div>
+    <div class="action-bar-stat">
+      <span class="stat-label">Confirmed</span>
+      <span class="stat-value dim" id="ab-confirmed">—</span>
+    </div>
+  </div>
+  <button class="cds--btn cds--btn--primary" id="submit-btn" onclick="startSubmission()" disabled>
+    🚀 Upload &amp; Dispatch Fleet
+  </button>
+</div>
+
+<script>
+/* ── Data ── */
+const ALL_FLEETS = [
+  { name:'fleet-b4bd2a33-1', id:'e3caac88-cfc2-4602-8684-b527a6811716',
+    project:'fleetlab-user1--ce-project', region:'eu-de',
+    tss:'fleet-task-store', snp:'fleet-subnetpool',
+    mounts:[
+      { mountPath:'/cos-input',  storeName:'fleet-input-store' },
+      { mountPath:'/cos-output', storeName:'fleet-output-store' },
+    ],
+  },
+  { name:'fleet-c7fa1122-2', id:'b9d2e1ff-0a21-4bbb-9911-abc123def456',
+    project:'fleetlab-user1--ce-project', region:'eu-de',
+    tss:'fleet-task-store', snp:'fleet-subnetpool',
+    mounts:[
+      { mountPath:'/cos-input',  storeName:'fleet-input-store' },
+      { mountPath:'/cos-output', storeName:'fleet-output-store' },
+    ],
+  },
+  { name:'fleet-d91ba445-3', id:'7c0f9aab-11cc-4d78-beef-cafebabe0001',
+    project:'fleetlab-user2--ce-project', region:'us-south',
+    tss:'fleet-task-store-us', snp:'fleet-subnetpool-us',
+    mounts:[
+      { mountPath:'/data/in',  storeName:'us-input-store' },
+      { mountPath:'/data/out', storeName:'us-output-store' },
+    ],
+  },
+  { name:'fleet-gpu-a100-1', id:'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    project:'prod-fleet-project', region:'eu-de',
+    tss:'fleet-task-store', snp:'fleet-gpu-subnet',
+    mounts:[
+      { mountPath:'/models',  storeName:'gpu-model-store' },
+      { mountPath:'/results', storeName:'gpu-result-store' },
+    ],
+  },
+  { name:'fleet-au-batch-1', id:'deadbeef-0000-1111-2222-333344445555',
+    project:'prod-fleet-project', region:'au-syd',
+    tss:'fleet-task-store-au', snp:'fleet-subnetpool-au',
+    mounts:[
+      { mountPath:'/cos-input',  storeName:'au-input-store' },
+      { mountPath:'/cos-output', storeName:'au-output-store' },
+    ],
+  },
+];
+
+const PRESETS = {
+  empty: { idx: '', cmds: [], args: [] },
+  docling: {
+    idx: '{{filename}}',
+    cmds: ['docling'],
+    args: ['--num-threads', '12', '{{mount.fleet-input-store}}/{{cosPath}}', '--output', '{{mount.fleet-output-store}}/{{stem}}.md'],
+  },
+  wordcount: {
+    idx: '',
+    cmds: ['/bin/bash'],
+    args: ['-c', 'wc {{mount.fleet-input-store}}/{{cosPath}} > {{mount.fleet-output-store}}/wordcount_{{filename}}'],
+  },
+  inferencing: {
+    idx: '{{filename}}',
+    cmds: ['python'],
+    args: ['app.py', '--input', '{{mount.fleet-input-store}}/{{cosPath}}', '--output', '{{mount.fleet-output-store}}/{{stem}}_result.json'],
+  },
+};
+
+const MOCK_FILES  = [
+  {name:'report_2025.pdf',  size:'1.2 MB', bytes:1258291},
+  {name:'invoice_jan.pdf',  size:'340 KB', bytes:348160},
+  {name:'summary_q3.pdf',   size:'89 KB',  bytes:91136},
+];
+const MOCK_FOLDER = [
+  {name:'batch/doc_001.pdf', size:'2.4 MB', bytes:2516582},
+  {name:'batch/doc_002.pdf', size:'1.8 MB', bytes:1887437},
+  {name:'batch/doc_003.pdf', size:'3.1 MB', bytes:3250586},
+  {name:'batch/doc_004.pdf', size:'780 KB', bytes:798720},
+  {name:'batch/doc_005.pdf', size:'1.1 MB', bytes:1153434},
+];
+
+const state = { fleet: null, files: [], confirmed: false, pendingFleet: null };
+
+/* ── Sections ── */
+function toggleSection(id) { document.getElementById(id).classList.toggle('open'); }
+function openSection(id)   { document.getElementById(id).classList.add('open'); }
+
+/* ── Sub-accordion ── */
+function toggleSubAcc(id) { document.getElementById(id).classList.toggle('open'); }
+
+/* ── Fleet gate ── */
+function unlockUI() {
+  document.getElementById('fleet-gate').classList.add('hidden');
+  document.getElementById('main-content').style.display = '';
+}
+
+/* ── Fleet modal ── */
+function openFleetModal() {
+  document.getElementById('fleet-modal').classList.add('open');
+  filterFleets();
+}
+function closeFleetModal() {
+  // If no fleet yet, prevent closing — must select one
+  if (!state.fleet) return;
+  document.getElementById('fleet-modal').classList.remove('open');
+}
+function filterFleets() {
+  const q  = document.getElementById('fleet-search').value.toLowerCase();
+  const pr = document.getElementById('project-filter').value;
+  const re = document.getElementById('region-filter').value;
+  const list = ALL_FLEETS.filter(f =>
+    (!q  || f.name.toLowerCase().includes(q)) &&
+    (!pr || f.project === pr) &&
+    (!re || f.region  === re)
+  );
+  document.getElementById('fleet-rows').innerHTML = list.length
+    ? list.map(f => `
+      <div class="fleet-row" onclick="selectPendingFleet(this,'${f.id}')">
+        <div class="fleet-row__name">${f.name}</div>
+        <div class="fleet-row__meta">${f.project}</div>
+        <div class="fleet-row__mounts">Mounts: ${f.mounts.map(m=>`${m.mountPath} ← ${m.storeName}`).join(' · ')}</div>
+        <div class="fleet-row__tags">
+          <span class="cds--tag cds--tag--green">standby</span>
+          <span class="cds--tag cds--tag--gray">${f.region}</span>
+        </div>
+      </div>`).join('')
+    : '<div style="padding:24px;text-align:center;color:var(--cds-text-secondary)">No fleets match your filters</div>';
+}
+function selectPendingFleet(el, id) {
+  document.querySelectorAll('.fleet-row').forEach(r => r.classList.remove('sel'));
+  el.classList.add('sel');
+  state.pendingFleet = ALL_FLEETS.find(f => f.id === id);
+  document.getElementById('modal-confirm-btn').disabled = false;
+}
+function confirmFleet() {
+  const isFirst = !state.fleet;
+  state.fleet = state.pendingFleet;
+  document.getElementById('fleet-modal').classList.remove('open');
+  updateFleetPill();
+  updateFleetSection();
+  renderMountChips();
+  updateActionBar();
+  if (isFirst) unlockUI();
+  livePreview(); // re-expand mounts in preview if files already staged
+}
+
+function updateFleetPill() {
+  const f = state.fleet;
+  if (!f) return;
+  document.getElementById('fleet-pill').innerHTML = `
+    <span class="fleet-dot"></span>
+    <span style="font-weight:600;color:#fff">${f.name}</span>
+    <span style="color:#8d8d8d;font-size:11px;margin-left:4px">${f.region}</span>
+    <span style="color:#a8a8a8;font-size:11px;margin-left:4px">▼</span>`;
+}
+
+function updateFleetSection() {
+  const f = state.fleet;
+  if (!f) return;
+  document.getElementById('sec-fleet-meta').textContent = `${f.name} · ${f.region}`;
+  // Fleet info bar
+  document.getElementById('fleet-detail-bar').innerHTML = `
+    <div class="fi-item"><span class="fi-label">Fleet</span><span class="fi-value">${f.name}</span></div>
+    <div class="fi-item"><span class="fi-label">Project</span><span class="fi-value">${f.project}</span></div>
+    <div class="fi-item"><span class="fi-label">Region</span><span class="fi-value">${f.region}</span></div>
+    <div class="fi-item"><span class="fi-label">Task State Store</span><span class="fi-value">${f.tss}</span></div>`;
+  // Mount reference table
+  const prefix = document.getElementById('cos-prefix') ? document.getElementById('cos-prefix').value : 'input/batch1/';
+  document.getElementById('mount-tbody').innerHTML = f.mounts.map(m => {
+    const exampleFile = 'doc.pdf';
+    const exampleCosPath = prefix + exampleFile;
+    const exampleContainerPath = `${m.mountPath}/${exampleCosPath}`;
+    return `<tr>
+      <td>${m.storeName}</td>
+      <td>${m.mountPath}</td>
+      <td style="font-family:monospace">{{mount.${m.storeName}}}</td>
+      <td class="path-example">${exampleContainerPath}</td>
+    </tr>`;
+  }).join('');
+  // Submit section
+  document.getElementById('s4-fleet').textContent  = f.name;
+  document.getElementById('s4-region').textContent = f.region;
+  document.getElementById('s4-tss').textContent    = f.tss;
+  document.getElementById('fleet-info-bar-submit').classList.remove('hidden');
+}
+
+function renderMountChips() {
+  const f = state.fleet;
+  const container = document.getElementById('ph-chips');
+  container.querySelectorAll('[data-mount]').forEach(el => el.remove());
+  const tip = document.getElementById('ph-chips-tip');
+  if (!f || !f.mounts || !f.mounts.length) {
+    tip.textContent = '← select a fleet to see {{mount.X}} chips';
+    return;
+  }
+  f.mounts.forEach(m => {
+    const ph   = `{{mount.${m.storeName}}}`;
+    const chip = document.createElement('span');
+    chip.className   = 'ph-chip ph-chip-mount';
+    chip.setAttribute('data-mount', m.storeName);
+    chip.title       = `resolves to: ${m.mountPath}`;
+    chip.textContent = ph;
+    chip.onclick = (e) => copyPh(e, ph);
+    container.insertBefore(chip, tip);
+  });
+  tip.textContent = `← fleet has ${f.mounts.length} mount(s); hover for resolved path`;
+}
+
+/* ── Drag-and-drop sortable rows ── */
+let dragSrc = null;
+
+function makeSortRow(listId, val, addInput) {
+  const row = document.createElement('div');
+  row.className = 'sort-row';
+  row.draggable  = true;
+
+  // Drag handle
+  const handle = document.createElement('span');
+  handle.className   = 'drag-handle';
+  handle.textContent = '⠿';
+  handle.title       = 'Drag to reorder';
+  row.appendChild(handle);
+
+  // Input
+  if (addInput) {
+    const inp = document.createElement('input');
+    inp.className   = 'cds--text-input';
+    inp.type        = 'text';
+    inp.value       = val || '';
+    inp.placeholder = listId === 'cmds-list' ? 'e.g. python or /bin/bash' : 'value or {{placeholder}}';
+    inp.style.flex  = '1';
+    inp.oninput     = () => { livePreview(); updateTemplateMeta(); };
+    row.appendChild(inp);
+  }
+
+  // Remove button
+  const rm = document.createElement('button');
+  rm.className   = 'cds--btn cds--btn--ghost cds--btn--sm cds--btn--icon-only';
+  rm.textContent = '✕';
+  rm.onclick     = () => { row.remove(); livePreview(); updateTemplateMeta(); };
+  row.appendChild(rm);
+
+  // Drag events
+  row.addEventListener('dragstart', e => {
+    dragSrc = row;
+    row.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  row.addEventListener('dragend', () => {
+    row.classList.remove('dragging');
+    document.querySelectorAll('.sort-row').forEach(r => r.classList.remove('drag-over'));
+    dragSrc = null;
+    livePreview(); updateTemplateMeta();
+  });
+  row.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragSrc && dragSrc !== row) row.classList.add('drag-over');
+  });
+  row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+  row.addEventListener('drop', e => {
+    e.preventDefault();
+    row.classList.remove('drag-over');
+    if (dragSrc && dragSrc !== row) {
+      const list = row.parentNode;
+      const rows = [...list.children];
+      const srcIdx = rows.indexOf(dragSrc);
+      const tgtIdx = rows.indexOf(row);
+      if (srcIdx < tgtIdx) list.insertBefore(dragSrc, row.nextSibling);
+      else                  list.insertBefore(dragSrc, row);
+      livePreview(); updateTemplateMeta();
+    }
+  });
+
+  return row;
+}
+
+function addCmdRow(val) {
+  document.getElementById('cmds-list').appendChild(makeSortRow('cmds-list', val, true));
+}
+function addArgRow(val) {
+  document.getElementById('args-list').appendChild(makeSortRow('args-list', val, true));
+}
+
+/* ── Template presets ── */
+function applyPreset(key) {
+  if (!key) return;
+  const p = PRESETS[key];
+  document.getElementById('t-idx').value = p.idx || '';
+  document.getElementById('cmds-list').innerHTML = '';
+  (p.cmds || []).forEach(v => addCmdRow(v));
+  document.getElementById('args-list').innerHTML = '';
+  (p.args || []).forEach(v => addArgRow(v));
+  livePreview();
+  updateTemplateMeta();
+}
+
+function updateTemplateMeta() {
+  const idx  = document.getElementById('t-idx').value.trim();
+  const cmds = [...document.querySelectorAll('#cmds-list input')].map(i => i.value.trim()).filter(Boolean);
+  const args = [...document.querySelectorAll('#args-list input')].map(i => i.value.trim()).filter(Boolean);
+  const parts = [];
+  if (idx)         parts.push(`idx: "${idx.slice(0,20)}${idx.length>20?'…':''}"`);
+  if (cmds.length) parts.push(`cmds: [${cmds.slice(0,2).map(c=>`"${c}"`).join(', ')}${cmds.length>2?', …':''}]`);
+  if (args.length) parts.push(`${args.length} arg${args.length!==1?'s':''}`);
+  document.getElementById('sec-template-meta').textContent = parts.length ? parts.join(' · ') : 'Empty — define idx · cmds · args';
+}
+
+function saveTemplateDialog() {
+  const name = prompt('Name for this template:', 'My Template');
+  if (name) alert(`Template "${name}" saved to COS (dispatcher/templates.json).`);
+}
+
+function copyPh(event, ph) {
+  navigator.clipboard.writeText(ph).catch(()=>{});
+  event.target.style.background = '#d0e2ff';
+  setTimeout(() => { event.target.style.background = ''; }, 400);
+}
+
+/* ── Files ── */
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropzone').classList.remove('drag');
+  loadFiles(MOCK_FILES);
+}
+function loadFiles(files) {
+  state.files = files.map(f => ({ ...f }));
+  renderFileTable();
+  livePreview();
+}
+function clearFiles() {
+  state.files = [];
+  document.getElementById('file-table-wrap').classList.add('hidden');
+  document.getElementById('sec-files-meta').textContent = 'No files staged';
+  document.getElementById('preview-empty-msg').classList.remove('hidden');
+  document.getElementById('preview-content').classList.add('hidden');
+  document.getElementById('sec-preview-meta').textContent = 'Stage files to generate preview';
+  resetConfirm();
+  updateActionBar();
+}
+function renderFileTable() {
+  const wrap   = document.getElementById('file-table-wrap');
+  const tbody  = document.getElementById('file-tbody');
+  const prefix = document.getElementById('cos-prefix').value;
+  tbody.innerHTML = '';
+  state.files.forEach((f, i) => {
+    const fname  = f.name.split('/').pop();
+    const cosKey = prefix + fname;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="mono text-muted">${i+1}</td>
+      <td class="mono">${fname}</td>
+      <td class="text-muted">${f.size}</td>
+      <td class="mono text-muted" style="font-size:11px">${cosKey}</td>`;
+    tbody.appendChild(tr);
+  });
+  const n = state.files.length;
+  document.getElementById('file-count').textContent = n;
+  document.getElementById('sec-files-meta').textContent = n ? `${n} file${n!==1?'s':''} staged` : 'No files staged';
+  wrap.classList.toggle('hidden', n === 0);
+  // Update mount table example paths
+  if (state.fleet) updateFleetSection();
+  updateActionBar();
+}
+
+/* ── JSONL generation ── */
+/* expandPh: resolve all {{placeholder}} tokens against per-file context.
+   IMPORTANT — {{mount.STORE_NAME}} resolves to the fleet's mount path for that
+   store. The full container path is: mountPath + "/" + cosPath
+   (where cosPath = cos prefix + filename = the COS object key). */
+function expandPh(tpl, { fname, stem, ext, prefix, cosPath, taskIdx, mounts }) {
+  let s = String(tpl)
+    .replace(/\{\{filename\}\}/g, fname)
+    .replace(/\{\{stem\}\}/g,     stem)
+    .replace(/\{\{ext\}\}/g,      ext)
+    .replace(/\{\{prefix\}\}/g,   prefix)
+    .replace(/\{\{cosPath\}\}/g,  cosPath)
+    .replace(/\{\{index\}\}/g,    String(taskIdx).padStart(5,'0'));
+  (mounts || []).forEach(m => {
+    const re = new RegExp(`\\{\\{mount\\.${m.storeName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\}\\}`, 'g');
+    s = s.replace(re, m.mountPath);
+  });
+  return s;
+}
+
+function buildJsonlLines(files, limit) {
+  const idxTpl    = document.getElementById('t-idx').value.trim();
+  const cmdInputs = [...document.querySelectorAll('#cmds-list input')].map(i => i.value.trim()).filter(Boolean);
+  const argInputs = [...document.querySelectorAll('#args-list input')].map(i => i.value);
+  const mounts    = (state.fleet && state.fleet.mounts) || [];
+  const list      = limit ? files.slice(0, limit) : files;
+
+  return list.map((f, taskIdx) => {
+    const fname   = f.name.split('/').pop();
+    const stem    = fname.replace(/\.[^.]+$/, '');
+    const ext     = fname.includes('.') ? fname.split('.').pop() : '';
+    const prefix  = document.getElementById('cos-prefix').value;
+    const cosPath = prefix + fname;
+    const ctx     = { fname, stem, ext, prefix, cosPath, taskIdx, mounts };
+
+    const task = {};
+    if (idxTpl)           task.idx  = expandPh(idxTpl, ctx);
+    if (cmdInputs.length) task.cmds = cmdInputs.map(c => expandPh(c, ctx));
+    if (argInputs.length) task.args = argInputs.map(a => expandPh(a, ctx));
+    return task; // return object, not string — we colorize from the object
+  });
+}
+
+/* colorizeJsonl: build syntax-highlighted HTML from a plain JS object.
+   Operates on the parsed object — never regex-substitutes on HTML — so
+   there is no risk of double-escaping or corrupted span tags. */
+function colorizeJsonl(taskObj) {
+  function colorVal(v) {
+    if (typeof v === 'string')  return `<span class="jl-str">"${escHtml(v)}"</span>`;
+    if (typeof v === 'number')  return `<span class="jl-num">${v}</span>`;
+    if (typeof v === 'boolean') return `<span class="jl-bool">${v}</span>`;
+    if (Array.isArray(v))       return '[' + v.map(colorVal).join(',') + ']';
+    return escHtml(String(v));
+  }
+  const parts = Object.keys(taskObj).map(k =>
+    `<span class="jl-key">"${k}"</span>:${colorVal(taskObj[k])}`
+  );
+  return '{' + parts.join(',') + '}';
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function livePreview() {
+  const hasFiles = state.files.length > 0;
+  document.getElementById('preview-empty-msg').classList.toggle('hidden', hasFiles);
+  document.getElementById('preview-content').classList.toggle('hidden', !hasFiles);
+
+  if (hasFiles) {
+    openSection('sec-preview');
+    const tasks = buildJsonlLines(state.files, 20);
+    const total = state.files.length;
+    const html  = tasks.map(t => `<div>${colorizeJsonl(t)}</div>`).join('');
+    const more  = total > 20 ? `<span class="jl-more">… and ${total-20} more line(s) not shown</span>` : '';
+    document.getElementById('jsonl-terminal').innerHTML = html + more;
+    document.getElementById('preview-line-count').textContent = `${total} task${total!==1?'s':''}`;
+    document.getElementById('sec-preview-meta').textContent   = `${total} task${total!==1?'s':''} · review & confirm`;
+    resetConfirm();
+  }
+  updateActionBar();
+}
+
+/* ── Confirmation ── */
+function toggleConfirm() {
+  state.confirmed = !state.confirmed;
+  document.getElementById('confirm-checkbox').classList.toggle('checked', state.confirmed);
+  document.getElementById('sec-preview').classList.toggle('done', state.confirmed);
+  if (state.confirmed) { openSection('sec-submit'); buildSubmitView(); }
+  updateActionBar();
+}
+function resetConfirm() {
+  state.confirmed = false;
+  document.getElementById('confirm-checkbox').classList.remove('checked');
+  document.getElementById('sec-preview').classList.remove('done');
+  updateActionBar();
+}
+
+/* ── Action bar ── */
+function updateActionBar() {
+  const f  = state.fleet;
+  const n  = state.files.length;
+  const el = document.getElementById('ab-fleet');
+  el.textContent = f ? f.name : 'not selected';
+  el.className   = 'stat-value' + (f ? '' : ' dim');
+  document.getElementById('ab-files').textContent = n;
+  document.getElementById('ab-tasks').textContent = n;
+  const conf = document.getElementById('ab-confirmed');
+  conf.textContent = state.confirmed ? '✓ yes' : '—';
+  conf.className   = 'stat-value' + (state.confirmed ? '' : ' dim');
+  document.getElementById('submit-btn').disabled = !(f && n > 0 && state.confirmed);
+}
+
+/* ── Submit view ── */
+function buildSubmitView() {
+  if (state.fleet) {
+    document.getElementById('s4-tasks').textContent = state.files.length;
+    document.getElementById('fleet-info-bar-submit').classList.remove('hidden');
+  }
+  const prefix = document.getElementById('cos-prefix').value;
+  document.getElementById('upload-progress-tbody').innerHTML = state.files.map(f => {
+    const fname = f.name.split('/').pop();
+    const key   = prefix + fname;
+    const id    = fname.replace(/[^a-z0-9]/gi, '_');
+    return `<tr>
+      <td class="mono">${fname}</td>
+      <td class="mono text-muted" style="font-size:11px">${key}</td>
+      <td class="text-muted">${f.size}</td>
+      <td class="upload-status-cell"><span class="cds--tag cds--tag--gray" id="ustatus-${id}">Pending</span></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('cos-phase-tag').innerHTML      = '';
+  document.getElementById('dispatch-phase-tag').innerHTML = '';
+  document.getElementById('dispatch-waiting').classList.remove('hidden');
+  document.getElementById('dispatch-result').classList.add('hidden');
+  document.getElementById('success-banner').classList.add('hidden');
+}
+
+/* ── Submission ── */
+function startSubmission() {
+  if (!state.fleet)     { alert('Please select a fleet first.'); openFleetModal(); return; }
+  if (!state.files.length) { alert('Please stage files first.'); return; }
+  if (!state.confirmed)    { alert('Please review and confirm the JSONL preview first.'); return; }
+  openSection('sec-submit');
+  buildSubmitView();
+  document.getElementById('submit-btn').disabled = true;
+  document.getElementById('submit-btn').innerHTML = '<span class="spinner"></span> Uploading…';
+  document.getElementById('cos-phase-tag').innerHTML = '<span class="cds--tag cds--tag--blue">In progress</span>';
+  let i = 0;
+  const files = state.files;
+  const prefix = document.getElementById('cos-prefix').value;
+  function uploadNext() {
+    if (i >= files.length) { onUploadsComplete(); return; }
+    const fname = files[i].name.split('/').pop();
+    const id    = fname.replace(/[^a-z0-9]/gi, '_');
+    const el    = document.getElementById('ustatus-' + id);
+    if (el) el.outerHTML = `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px"><span class="spinner"></span> Uploading</span>`;
+    setTimeout(() => {
+      const cell = document.querySelector(`#upload-progress-tbody tr:nth-child(${i+1}) .upload-status-cell`);
+      if (cell) cell.innerHTML = `<span class="cds--tag cds--tag--green">✓ Done</span>`;
+      i++; uploadNext();
+    }, 600 + Math.random()*500);
+  }
+  uploadNext();
+}
+
+function onUploadsComplete() {
+  document.getElementById('cos-phase-tag').innerHTML      = '<span class="cds--tag cds--tag--green">✓ Complete</span>';
+  document.getElementById('dispatch-phase-tag').innerHTML = '<span class="cds--tag cds--tag--blue">In progress</span>';
+  document.getElementById('submit-btn').innerHTML         = '<span class="spinner"></span> Dispatching…';
+  document.getElementById('dispatch-waiting').classList.add('hidden');
+  setTimeout(() => {
+    const tasks = buildJsonlLines(state.files);
+    // For the dispatch view we show JSON strings (plain, not highlighted)
+    const html  = tasks.slice(0,20).map(t => `<div>${colorizeJsonl(t)}</div>`).join('');
+    document.getElementById('dispatch-jsonl-view').innerHTML   = html;
+    document.getElementById('dispatch-task-count').textContent = `${tasks.length} tasks submitted`;
+    document.getElementById('dispatch-result').classList.remove('hidden');
+    document.getElementById('dispatch-phase-tag').innerHTML    = '<span class="cds--tag cds--tag--green">✓ Dispatched</span>';
+    const runName = `dispatcher-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`;
+    document.getElementById('success-fleet-name').textContent  = runName;
+    document.getElementById('success-task-count').textContent  = state.files.length;
+    document.getElementById('success-cmd').innerHTML =
+      `ibmcloud ce fleet get --name ${runName}<br>ibmcloud ce fleet task list --fleet-name ${runName}`;
+    document.getElementById('success-banner').classList.remove('hidden');
+    document.getElementById('success-banner').scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('submit-btn').innerHTML = '🚀 Upload & Dispatch Fleet';
+  }, 1800);
+}
+
+/* ── Reset ── */
+function resetAll() {
+  state.files = []; state.confirmed = false;
+  clearFiles();
+  document.getElementById('success-banner').classList.add('hidden');
+  document.getElementById('submit-btn').innerHTML = '🚀 Upload &amp; Dispatch Fleet';
+  updateActionBar();
+}
+
+/* ── Init ── */
+// Start with empty template — fleet must be selected first
+applyPreset('empty');
+updateActionBar();
+</script>
+</body>
+</html>

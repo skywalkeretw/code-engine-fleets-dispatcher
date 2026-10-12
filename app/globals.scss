@@ -1,0 +1,283 @@
+/* Carbon Design System base + custom tokens */
+@use '@carbon/react/scss/breakpoint' as *;
+@use '@carbon/react';
+
+/* ── Global resets ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  --dispatcher-shell-bg: #161616;
+  --dispatcher-action-bar-height: 64px;
+}
+
+/* ── Body ── */
+body {
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  background: var(--cds-background, #f4f4f4);
+  color: var(--cds-text-primary, #161616);
+  min-height: 100vh;
+}
+
+/* ── Page content wrapper with bottom padding for sticky action bar ── */
+.page-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem calc(var(--dispatcher-action-bar-height) + 1.5rem);
+}
+
+/* Mobile: full width, tighter padding */
+@include breakpoint-down(md) {
+  .page-content {
+    padding: 1rem 0.75rem calc(var(--dispatcher-action-bar-height) + 1rem);
+  }
+}
+
+/* ── Carbon UIShell header overrides ── */
+.cds--header {
+  position: sticky;
+  top: 0;
+  z-index: 8000;
+}
+
+/* ── Fleet gate overlay ── */
+.fleet-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 7500;
+  background: rgba(244, 244, 244, 0.97);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  text-align: center;
+  padding: 2rem;
+}
+.fleet-gate__icon { font-size: 3.5rem; }
+.fleet-gate__title { font-size: 1.75rem; font-weight: 300; }
+.fleet-gate__sub {
+  font-size: 0.9375rem;
+  color: var(--cds-text-secondary, #525252);
+  max-width: 28rem;
+  line-height: 1.6;
+}
+
+/* ── Section accordion ── */
+.section-card {
+  background: var(--cds-layer-01, #fff);
+  border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  margin-bottom: 0.75rem;
+}
+.section-header {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 52px;
+  text-align: left;
+  user-select: none;
+  border-bottom: 1px solid transparent;
+  transition: background 0.15s;
+}
+.section-header:hover { background: var(--cds-layer-02, #f4f4f4); }
+.section-card--open .section-header {
+  border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+}
+.section-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--cds-layer-selected-01, #e0e0e0);
+  color: var(--cds-text-secondary, #525252);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; flex-shrink: 0;
+}
+.section-num--done { background: var(--cds-support-success, #24a148); color: #fff; }
+.section-title { font-size: 0.9375rem; font-weight: 600; flex: 1; }
+.section-meta { font-size: 0.75rem; color: var(--cds-text-helper, #6f6f6f); }
+.section-arrow {
+  font-size: 0.75rem;
+  color: var(--cds-text-secondary, #525252);
+  transition: transform 0.2s;
+  margin-left: 0.5rem;
+}
+.section-card--open .section-arrow { transform: rotate(180deg); }
+.section-body { display: none; padding: 1.5rem 1rem; }
+.section-card--open .section-body { display: block; }
+
+/* ── Drag-handle sortable rows ── */
+.sort-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--cds-layer-02, #f4f4f4);
+  border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  padding: 4px 6px;
+  margin-bottom: 4px;
+}
+.sort-row--drag-over { border-color: var(--cds-interactive, #0f62fe); background: #edf5ff; }
+.sort-row--dragging { opacity: 0.4; }
+.drag-handle {
+  cursor: grab;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--cds-text-helper, #6f6f6f);
+  padding: 0 4px;
+  user-select: none;
+  touch-action: none;
+  flex-shrink: 0;
+}
+.drag-handle:active { cursor: grabbing; }
+
+/* ── Placeholder chips ── */
+.ph-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0.5rem 0;
+  margin-bottom: 1rem;
+}
+.ph-chip {
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--cds-tag-background-blue, #edf5ff);
+  color: var(--cds-tag-color-blue, #0043ce);
+  border-radius: 2px;
+  cursor: pointer;
+  border: 1px solid #a8c8ff;
+  font-family: 'IBM Plex Mono', monospace;
+  transition: background 0.12s;
+  user-select: none;
+}
+.ph-chip:hover { background: #d0e2ff; }
+.ph-chip--mount {
+  background: #defbe6;
+  color: #044317;
+  border-color: #a7f0ba;
+}
+.ph-chip--mount:hover { background: #b4f4c5; }
+.ph-chip-tip {
+  font-size: 0.6875rem;
+  color: var(--cds-text-helper, #6f6f6f);
+  align-self: center;
+}
+
+/* ── Mount reference table ── */
+.mount-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+.mount-table th {
+  text-align: left;
+  padding: 6px 10px;
+  background: var(--cds-layer-02, #f4f4f4);
+  border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--cds-text-secondary, #525252);
+  white-space: nowrap;
+}
+.mount-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  word-break: break-all;
+}
+.mount-table tr:last-child td { border-bottom: none; }
+
+/* Mobile: hide the example column to save space */
+@include breakpoint-down(md) {
+  .mount-table .col-example { display: none; }
+}
+
+/* ── JSONL terminal preview ── */
+.jsonl-terminal {
+  background: #161616;
+  color: #42be65;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  line-height: 1.7;
+  padding: 1rem;
+  overflow-x: auto;
+  overflow-y: auto;
+  border: 1px solid #393939;
+  max-height: 420px;
+}
+.terminal-header {
+  background: #262626;
+  padding: 6px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid #393939;
+  border-bottom: none;
+}
+.terminal-header span { font-size: 0.75rem; color: #8d8d8d; }
+.jl-key  { color: #82cfff; }
+.jl-str  { color: #42be65; }
+.jl-num  { color: #ff7eb6; }
+.jl-more { color: #6f6f6f; font-style: italic; display: block; margin-top: 4px; }
+
+/* ── Sticky action bar ── */
+.action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 7000;
+  background: #262626;
+  border-top: 1px solid #525252;
+  height: var(--dispatcher-action-bar-height);
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.action-bar-stats {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  overflow: hidden;
+}
+.ab-stat { display: flex; flex-direction: column; gap: 1px; }
+.ab-stat__label { font-size: 0.6875rem; color: #8d8d8d; }
+.ab-stat__value { font-size: 0.8125rem; font-weight: 600; color: #fff; }
+.ab-stat__value--dim { color: #a8a8a8; font-style: italic; }
+
+/* Mobile: hide fleet name stat to save space */
+@include breakpoint-down(sm) {
+  .ab-stat--fleet { display: none; }
+}
+
+/* ── Upload progress ── */
+.upload-status { min-width: 100px; }
+
+/* ── Responsive helpers ── */
+.w-full { width: 100%; }
+.mono { font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; }
+.text-muted { color: var(--cds-text-secondary, #525252); }
+.text-helper { color: var(--cds-text-helper, #6f6f6f); font-size: 0.75rem; }
+.mt-4 { margin-top: 1rem; }
+.mt-6 { margin-top: 1.5rem; }
+.hidden { display: none !important; }
+
+/* ── API debug panel — hidden on mobile ── */
+.debug-panel,
+.debug-panel-tab {
+  display: none;
+}
+
+@include breakpoint(md) {
+  .debug-panel,
+  .debug-panel-tab {
+    display: flex;
+  }
+}

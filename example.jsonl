@@ -1,0 +1,1 @@
+{"cmds":["docling"],"args":["--num-threads","12","/input/input/batch/doc_001.pdf","--output","/output/doc_001.md"]}
