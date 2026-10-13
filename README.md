@@ -38,9 +38,10 @@ the exact `curl` command for every IBM Cloud call the app would make.
 | You need | Why |
 |---|---|
 | A Code Engine **fleet** (standby or running) | This is where your tasks run. |
-| At least one **persistent data store** in that project, backed by a **private COS bucket** with an **HMAC secret** | Your files are uploaded to this bucket. The app reads the HMAC credentials from the project, so you never paste COS keys into the app. |
+| At least one **persistent data store** in that project, backed by a **private COS bucket** with an **HMAC secret** | Your files are uploaded to this bucket. The HMAC secret is required by the persistent data store itself; the app only reads it as a backup (see below), so you never paste COS keys into the app. |
 | The fleet has that bucket **mounted** | So your task containers can read the uploaded files. |
-| An **IBM Cloud API key** with access to the Code Engine project (list fleets, read secrets, add tasks) | The app calls the Code Engine API on your behalf. The key stays on the server and is never sent to the browser. |
+| **Preferred:** an IAM **trusted profile** that trusts the Code Engine app, with access to the Code Engine project (list fleets, add tasks) and the COS bucket (Writer) | The app authenticates as the trusted profile. No API key, no HMAC keys read, nothing to rotate. |
+| **Backup:** an **IBM Cloud API key** with access to the Code Engine project (list fleets, read secrets, add tasks) | Used when no trusted profile is configured, or when the trusted profile can't be used. The key stays on the server and is never sent to the browser. |
 | Node.js 20+ **or** Docker | To run the app. |
 
 Not set up yet? The IBM Cloud Code Engine docs cover this under
@@ -83,20 +84,44 @@ ibmcloud cr login
 docker build -t <region>.icr.io/<namespace>/fleets-dispatcher:latest .
 docker push <region>.icr.io/<namespace>/fleets-dispatcher:latest
 
-# 2. Store the API key as a secret (Code Engine does not provide one for you)
-ibmcloud ce secret create --name dispatcher-secrets \
-  --from-literal IBMCLOUD_API_KEY=<your-api-key>
-
-# 3. Create the app (add --registry-secret if the registry is private)
+# 2. Create the app with trusted profiles enabled (add --registry-secret if the registry is private)
 ibmcloud ce app create \
   --name fleets-dispatcher \
   --image <region>.icr.io/<namespace>/fleets-dispatcher:latest \
   --port 8080 \
-  --env-from-secret dispatcher-secrets \
+  --trusted-profiles-enabled=true \
+  --env TRUSTED_PROFILE_ID=<trusted-profile-id> \
   --visibility project
+
+# 3. In IAM, create the trusted profile and let it trust this app:
+#    Trust a "Compute resource" -> Code Engine -> this project/application,
+#    then grant it access to Code Engine (project + fleets) and COS (Writer).
+#    https://cloud.ibm.com/docs/codeengine?topic=codeengine-trusted-profiles
 ```
 
+Code Engine mounts a compute resource token into the container; the app exchanges it
+for an IAM token of the trusted profile. The same token is used for the Code Engine
+API and for COS, so no API key and no HMAC keys are read.
+
+**Backup (API key):** to keep the old behaviour, or as a safety net if the trusted
+profile can't be used, also store a key and pass it to the app:
+
+```bash
+ibmcloud ce secret create --name dispatcher-secrets \
+  --from-literal IBMCLOUD_API_KEY=<your-api-key>
+ibmcloud ce app update --name fleets-dispatcher --env-from-secret dispatcher-secrets
+```
+
+Without `TRUSTED_PROFILE_ID`/`TRUSTED_PROFILE_NAME` the app uses the API key and the
+HMAC secret exactly as before. With a trusted profile configured, the app falls back to
+them automatically (and logs a warning) if the trusted profile token exchange fails or
+the profile can't reach the bucket.
+
 Code Engine sets `CE_REGION` for you, so the app only looks at that region.
+
+> **Uploads with a trusted profile:** presigned URLs can only be signed with HMAC keys,
+> so in trusted-profile mode uploads stream through the server (`/api/upload`) instead of
+> going browser-to-COS directly. Direct uploads are used again in the HMAC backup mode.
 
 **Authentication:** the app does not implement login itself. It expects users to be
 authenticated by an OIDC provider placed in front of it, so all requests (including
@@ -174,12 +199,16 @@ More examples are in [`docs/example-templates.json`](./docs/example-templates.js
 
 ## Configuration
 
-Only `IBMCLOUD_API_KEY` is required. Everything else is optional. See
-[`.env.example`](./.env.example) for the full list.
+Authentication needs **either** `TRUSTED_PROFILE_ID`/`TRUSTED_PROFILE_NAME` (preferred) **or**
+`IBMCLOUD_API_KEY` (backup); neither is needed in demo mode. Everything else is optional.
+See [`.env.example`](./.env.example) for the full list.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `IBMCLOUD_API_KEY` | — | **Required** (not needed in demo mode). |
+| `TRUSTED_PROFILE_ID` | — | **Preferred auth.** IAM trusted profile ID (takes precedence over the name). Requires `--trusted-profiles-enabled=true` on the app. |
+| `TRUSTED_PROFILE_NAME` | — | Alternative to `TRUSTED_PROFILE_ID`. |
+| `CR_TOKEN_FILE_PATH` | `/var/run/secrets/codeengine.cloud.ibm.com/compute-resource-token/token` | Compute resource token location. Only override for local testing. |
+| `IBMCLOUD_API_KEY` | — | **Backup auth**, required if no trusted profile is configured (not needed in demo mode). |
 | `DEMO_MODE` | off | `true` = fake fleet, simulated uploads. |
 | `CE_REGION` | set by Code Engine | Only look at this region. |
 | `CE_REGIONS` | all 10 regions | Comma-separated list, for local multi-region use. |
@@ -197,8 +226,9 @@ Upload tuning (`NEXT_PUBLIC_MAX_CONCURRENT_UPLOADS`, `NEXT_PUBLIC_MAX_UPLOAD_RET
 
 | Symptom | What to check |
 |---|---|
-| "Could not load fleets: IBMCLOUD_API_KEY is not set" | Set the variable (or try `DEMO_MODE=true`). |
-| "Could not load fleets: … 401/403" | The API key is wrong or lacks access to the Code Engine project. |
+| "Could not load fleets: IBMCLOUD_API_KEY is not set" | Neither a trusted profile nor an API key is configured. Set `TRUSTED_PROFILE_ID` or `IBMCLOUD_API_KEY` (or try `DEMO_MODE=true`). |
+| "Compute resource token not readable …" | Trusted profiles aren't enabled on the app: `ibmcloud ce app update --name <app> --trusted-profiles-enabled=true`. |
+| "Could not load fleets: … 401/403" | The API key / trusted profile is wrong or lacks access to the Code Engine project. For a trusted profile also check its trust rule matches this app. |
 | No fleets listed | Wrong region (`CE_REGION`), or the key can't see the project. |
 | "No COS buckets found" in the Files step | The fleet's project has no persistent data stores. Create one (see *What you need*). |
 | Uploads are slow or always take the "fallback" route | Direct browser-to-COS uploads need a CORS rule on the bucket allowing `PUT` from the app's URL. Without it the app automatically streams uploads through the server instead — slower, but it works. |

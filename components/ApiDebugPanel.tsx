@@ -258,7 +258,7 @@ export default function ApiDebugPanel({ enabled }: Props) {
             Active: DEMO_MODE or ENABLE_DEBUG=true · Max 200 entries · Polls every 2s
           </p>
           <p style={{ fontSize: '0.5625rem', color: '#525252', margin: '2px 0 0', lineHeight: 1.4 }}>
-            TOKEN=$({'curl -X POST "https://iam.cloud.ibm.com/identity/token" \\\n  -d "apikey=$IBMCLOUD_API_KEY" ...'})
+            TOKEN=$({'curl -X POST "https://iam.cloud.ibm.com/identity/token" \\\n  -d "grant_type=urn:ibm:params:oauth:grant-type:cr-token" \\\n  -d "cr_token=$(cat /var/run/secrets/.../token)" \\\n  -d "profile_id=$TRUSTED_PROFILE_ID" ...'})
           </p>
         </div>
       </div>

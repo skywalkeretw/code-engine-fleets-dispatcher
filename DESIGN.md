@@ -63,7 +63,9 @@ one port, fully deployable on IBM Code Engine (or any OCI-compatible runtime).
 ### Goals
 - Ship as a **single OCI container image** — no sidecar, no CLI, no volume mounts.
 - All IBM Cloud interactions (fleet listing, COS upload, fleet dispatch) use
-  **REST APIs directly** with an IAM bearer token obtained from the API key.
+  **REST APIs directly** with an IAM bearer token obtained from an IAM trusted
+  profile (preferred, via the Code Engine compute resource token) or, as backup,
+  from an API key.
 - Template storage is **stateless**: templates live in a dedicated COS object
   (`dispatcher/templates.json`) in the same bucket. No local filesystem writes.
 - Support flexible, template-driven JSONL generation so the dispatcher works
@@ -106,7 +108,7 @@ one port, fully deployable on IBM Code Engine (or any OCI-compatible runtime).
 │  │                                                               │  │
 │  │   IAM Token Manager (in-process, module-level singleton)      │  │
 │  │   └── POST https://iam.cloud.ibm.com/identity/token           │  │
-│  │       → exchanges IBMCLOUD_API_KEY for bearer token           │  │
+│  │       → trusted profile (CR token) or IBMCLOUD_API_KEY backup │  │
 │  │       → caches + auto-refreshes before expiry                 │  │
 │  └───────────────────────────────────────────────────────────────┘  │
 │                                                                     │
@@ -245,16 +247,30 @@ Next.js App Router is the correct fit because:
 
 #### `lib/iam.ts` — IAM Token Manager
 
-Exchanges `IBMCLOUD_API_KEY` for a bearer token. Implemented as a module-level
-singleton so the token is shared across all concurrent requests in the same
-Node.js process and refreshed proactively 60 s before expiry.
+Obtains a bearer token, **trusted profile first, API key as backup**. Implemented as
+module-level state so tokens are shared across all concurrent requests in the same
+Node.js process and refreshed proactively 60 s before expiry (cached per source).
 
-```
-POST https://iam.cloud.ibm.com/identity/token
-  grant_type=urn:ibm:params:oauth:grant-type:apikey
-  &apikey=<IBMCLOUD_API_KEY>
-→ { access_token, expiration }
-```
+1. **Trusted profile (preferred)** — active when `TRUSTED_PROFILE_ID` or
+   `TRUSTED_PROFILE_NAME` is set. Requires `--trusted-profiles-enabled=true` on the
+   Code Engine app, which mounts a compute resource token at
+   `/var/run/secrets/codeengine.cloud.ibm.com/compute-resource-token/token`
+   (override with `CR_TOKEN_FILE_PATH`).
+   ```
+   POST https://iam.cloud.ibm.com/identity/token
+     grant_type=urn:ibm:params:oauth:grant-type:cr-token
+     &cr_token=<contents of token file>
+     &profile_id=<TRUSTED_PROFILE_ID>      (or profile_name=<TRUSTED_PROFILE_NAME>)
+   → { access_token, expiration }
+   ```
+2. **API key (backup)** — used when no trusted profile is configured, or when the
+   trusted profile exchange fails and `IBMCLOUD_API_KEY` is set (a warning is logged).
+   ```
+   POST https://iam.cloud.ibm.com/identity/token
+     grant_type=urn:ibm:params:oauth:grant-type:apikey
+     &apikey=<IBMCLOUD_API_KEY>
+   → { access_token, expiration }
+   ```
 
 #### `lib/ce.ts` — Code Engine REST Client
 
@@ -269,9 +285,14 @@ cached in the module.
 
 #### `lib/cos.ts` — COS S3 Client
 
-`@aws-sdk/client-s3` configured for IBM COS. HMAC credentials
-(`COS_ACCESS_KEY_ID` / `COS_SECRET_ACCESS_KEY`) are used for S3-signed
-requests.
+`@aws-sdk/client-s3` configured for IBM COS. `resolveCosAccess()` picks the
+authentication mode per request:
+
+- **Trusted profile (preferred):** a custom signer sets `Authorization: Bearer <IAM token>`.
+  The HMAC secret is never read. A `HeadBucket` check confirms the profile can reach the
+  bucket; if it cannot, the HMAC backup is used.
+- **HMAC (backup):** credentials from the CE project's HMAC secret sign requests (AWS
+  SigV4). Required for presigned URLs.
 
 #### `lib/jsonl.ts` — JSONL Generator
 
@@ -411,10 +432,14 @@ made directly over HTTPS from the Next.js Node.js process.
 POST https://iam.cloud.ibm.com/identity/token
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=urn%3Aibm%3Aparams%3Aoauth%3Agrant-type%3Aapikey&apikey=<key>
+# Preferred: trusted profile
+grant_type=urn:ibm:params:oauth:grant-type:cr-token&cr_token=<CR token>&profile_id=<id>
+
+# Backup: API key
+grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=<key>
 ```
 
-Token cached in module scope; refreshed 60 s before `expiration`.
+Tokens cached in module scope (one per source); refreshed 60 s before `expiration`.
 
 ### Code Engine Fleet REST API
 
@@ -445,24 +470,31 @@ region. To list fleets across all projects the app:
 }
 ```
 
-### COS credentials — derived from CE project
+### COS access — derived from CE project
 
-COS credentials are **not** provided as env vars. Instead they are read at runtime
-from the CE project via the persistent-data-store → HMAC-secret chain:
+COS credentials are **not** provided as env vars. The bucket is resolved at runtime
+from the CE project's persistent data stores:
 
 1. `GET /v2/projects/<id>/persistent_data_stores` → get `bucket_name` + `hmac_secret_name`
-2. `GET /v2/projects/<id>/secrets/<hmac_secret_name>` → decode base64 data →
-   `{ access_key_id, secret_access_key }`
-3. Construct COS S3 endpoint as
+2. Construct COS S3 endpoint as
    `https://s3.<bucket_region>.cloud-object-storage.appdomain.cloud`
+
+Then, depending on the authentication mode:
+
+- **Trusted profile (preferred):** requests to COS carry the trusted profile's IAM
+  bearer token. The HMAC secret is **not** read.
+- **HMAC (backup):** `GET /v2/projects/<id>/secrets/<hmac_secret_name>` → decode base64
+  data → `{ access_key_id, secret_access_key }`.
 
 Credentials are cached per project in the module-level store. The only env var for
 COS is `COS_BUCKET` (which COS bucket in the fleet's project to use for uploads).
 
 ### IBM COS (S3-compatible)
 
-`@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` configured with the HMAC
-credentials retrieved from the CE project at runtime.
+`@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`, authenticated with the
+trusted profile's IAM token (preferred) or the HMAC credentials retrieved from the CE
+project at runtime (backup). Presigned URLs need HMAC keys, so they are only available
+in the backup mode.
 
 Operations:
 - `PutObject` — template saves and small file uploads (< 5 MB)
@@ -472,10 +504,13 @@ Operations:
   as fallback when presigned URL fails
 
 **Upload flow:**
-1. Browser calls `POST /api/presign` → server returns presigned PUT URL (1 h expiry)
+1. Browser calls `POST /api/presign` → server returns presigned PUT URL (1 h expiry).
+   In trusted-profile mode this returns `501` (no HMAC keys are read), so the browser
+   goes straight to step 3.
 2. Browser `PUT`s file body directly to COS using the presigned URL (bypasses CE 32 MB request limit)
-3. If presigned PUT fails (e.g. network error), browser falls back to `POST /api/upload`
+3. If presigned PUT is unavailable or fails, browser falls back to `POST /api/upload`
    which streams through the Next.js Route Handler to COS via AWS SDK multipart upload
+   (IAM bearer token in trusted-profile mode, HMAC otherwise)
 
 ---
 
@@ -526,7 +561,10 @@ No config files are written or read from the local filesystem.
 
 | Variable | Required | Description |
 |---|---|---|
-| `IBMCLOUD_API_KEY` | ✅ | IBM Cloud IAM API key — used to obtain bearer tokens for all CE API calls (not needed with `DEMO_MODE=true`) |
+| `TRUSTED_PROFILE_ID` | ✅ (preferred) | IAM trusted profile ID; the app exchanges the Code Engine compute resource token for this profile's IAM token. Takes precedence over `TRUSTED_PROFILE_NAME`. Requires `--trusted-profiles-enabled=true` |
+| `TRUSTED_PROFILE_NAME` | ❌ | Alternative to `TRUSTED_PROFILE_ID` |
+| `CR_TOKEN_FILE_PATH` | ❌ | Compute resource token file (default `/var/run/secrets/codeengine.cloud.ibm.com/compute-resource-token/token`); local testing only |
+| `IBMCLOUD_API_KEY` | ✅ (backup) | IBM Cloud IAM API key — used when no trusted profile is configured or as fallback when the trusted profile fails. One of the two auth options is required (neither with `DEMO_MODE=true`) |
 | `CE_REGION` | ❌ | Single region to scan; injected automatically by Code Engine |
 | `CE_REGIONS` | ❌ | Comma-separated list of CE regions to search. Defaults to all 10 CE regions: `us-south,us-east,eu-de,eu-gb,eu-es,jp-tok,jp-osa,au-syd,br-sao,ca-tor` |
 | `PORT` | ❌ | HTTP port (default: `8080`) |
@@ -534,9 +572,9 @@ No config files are written or read from the local filesystem.
 The bucket is chosen in the UI from the fleet project's persistent data stores
 (no `COS_BUCKET` variable). See `.env.example` for the complete, current list.
 
-COS credentials (`access_key_id`, `secret_access_key`) and the COS endpoint are
-derived at runtime by querying the CE project's persistent data stores and the
-referenced HMAC secret. No COS credentials are needed in the environment.
+The COS endpoint is derived at runtime from the CE project's persistent data stores.
+With a trusted profile, COS is accessed with the profile's IAM token; otherwise the
+referenced HMAC secret is read. No COS credentials are needed in the environment.
 
 ---
 
@@ -632,21 +670,24 @@ ibmcloud cr login
 docker tag fleets-dispatcher <region>.icr.io/<namespace>/fleets-dispatcher:latest
 docker push <region>.icr.io/<namespace>/fleets-dispatcher:latest
 
-ibmcloud ce secret create --name dispatcher-secrets \
-  --from-literal IBMCLOUD_API_KEY=... \
-  --from-literal COS_ACCESS_KEY_ID=... \
-  --from-literal COS_SECRET_ACCESS_KEY=...
-
+# Preferred: trusted profile (create it in IAM first: trust the CE app as a compute
+# resource; grant Code Engine project/fleet access and COS Writer)
 ibmcloud ce app create \
   --name fleets-dispatcher \
   --image <region>.icr.io/<namespace>/fleets-dispatcher:latest \
   --port 8080 \
-  --env-from-secret dispatcher-secrets \
+  --trusted-profiles-enabled=true \
+  --env TRUSTED_PROFILE_ID=<trusted-profile-id> \
   --env CE_REGION=eu-de \
   --env CE_PROJECT_NAME=fleetlab-user1--ce-project \
   --env COS_ENDPOINT=s3.eu-de.cloud-object-storage.appdomain.cloud \
   --env COS_BUCKET=fleet-input-store \
   --visibility project
+
+# Optional backup: API key, used if the trusted profile cannot be used
+ibmcloud ce secret create --name dispatcher-secrets \
+  --from-literal IBMCLOUD_API_KEY=...
+ibmcloud ce app update --name fleets-dispatcher --env-from-secret dispatcher-secrets
 ```
 
 ---
@@ -660,7 +701,7 @@ ibmcloud ce app create \
 | Design system | **IBM Carbon Design System** (`@carbon/react`) | Official IBM design language; Modal, DataTable, FileUploader, ProgressIndicator, InlineNotification used directly — no custom component reimplementation |
 | Multipart streaming | `busboy` (in Route Handler) | Stream-based parser — no temp files, no disk I/O |
 | COS client | `@aws-sdk/client-s3` | IBM COS is S3-compatible; AWS SDK v3 streams natively |
-| IBM Cloud auth | In-process IAM REST call | No `ibmcloud` CLI; single HTTP call, token cached in module scope |
+| IBM Cloud auth | In-process IAM REST call; trusted profile preferred, API key backup | No `ibmcloud` CLI; single HTTP call, token cached in module scope; trusted profiles avoid stored credentials and rotation |
 | Template storage | COS object `dispatcher/templates.json` | Zero additional infrastructure; consistent with the existing COS bucket |
 | Container base | `node:20-alpine` | Minimal attack surface |
 
@@ -668,10 +709,11 @@ ibmcloud ce app create \
 
 ## Security Considerations
 
-1. **Credentials stay in the Node.js process.** `IBMCLOUD_API_KEY`,
-   `COS_ACCESS_KEY_ID`, and `COS_SECRET_ACCESS_KEY` are read only by Server
-   Components, Server Actions, and Route Handlers — they are never serialised
-   into the client bundle or returned in API responses.
+1. **Credentials stay in the Node.js process.** With a trusted profile there is no
+   stored credential: the compute resource token and the IAM tokens derived from it
+   are read only server-side. In backup mode `IBMCLOUD_API_KEY` and the HMAC keys are
+   likewise read only by Server Components, Server Actions, and Route Handlers —
+   they are never serialised into the client bundle or returned in API responses.
 2. **No filesystem writes.** `output: standalone` + `readOnlyRootFilesystem: true`
    is safe. File data flows browser → Route Handler stream → COS S3 stream.
 3. **Server Actions are POST-only with CSRF protection.** Next.js Server Actions

@@ -1,12 +1,18 @@
 /**
  * lib/cos.ts — IBM COS S3 client
  *
- * Credentials are resolved from the CE project's persistent data stores at runtime.
- * Supports presigned PUT URLs (primary) and multipart upload (fallback).
+ * Two authentication modes (see resolveCosAccess):
+ * - Trusted profile (preferred): requests carry an IAM bearer token obtained via lib/iam.ts.
+ *   No HMAC secret is read. Bearer tokens cannot sign presigned URLs, so uploads go
+ *   through the server (/api/upload).
+ * - HMAC (backup): credentials from the CE project's HMAC secret. Supports presigned
+ *   PUT URLs and multipart upload.
  */
 
 import {
   S3Client,
+  type S3ClientConfig,
+  HeadBucketCommand,
   PutObjectCommand,
   GetObjectCommand,
   CreateMultipartUploadCommand,
@@ -15,7 +21,9 @@ import {
   AbortMultipartUploadCommand,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import type { HmacCredentials } from './ce'
+import { resolveCosCredentials, resolveCosTarget } from './ce'
+import type { HmacCredentials, CosTarget } from './ce'
+import { getTrustedProfileToken, isTrustedProfileConfigured } from './iam'
 
 // Part size for multipart: 8 MB (well within COS limits)
 const PART_SIZE = 8 * 1024 * 1024
@@ -34,6 +42,87 @@ function makeClient(creds: HmacCredentials): S3Client {
     },
     forcePathStyle: true,          // IBM COS requires path-style
   })
+}
+
+/**
+ * S3 client that authenticates with an IAM bearer token instead of an AWS4 signature.
+ * The token is fetched per request (cached in lib/iam.ts) so long uploads keep working
+ * across token expiry.
+ */
+function makeBearerClient(target: CosTarget): S3Client {
+  // RequestSigner (the object form of S3ClientConfig['signer']), derived to avoid a
+  // direct dependency on @smithy/types.
+  type Signer = Exclude<NonNullable<S3ClientConfig['signer']>, (...args: never[]) => unknown>
+  const signer: Signer = {
+    sign: async (request) => {
+      request.headers['authorization'] = `Bearer ${await getTrustedProfileToken()}`
+      return request
+    },
+  }
+
+  return new S3Client({
+    region: 'us-east-1',
+    endpoint: target.endpoint,
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
+    // Placeholder identity: the SDK requires one, but the custom signer below ignores it.
+    credentials: { accessKeyId: 'iam', secretAccessKey: 'iam' },
+    signer: async () => signer,
+    forcePathStyle: true,
+  })
+}
+
+// ── Access resolution ──────────────────────────────────────────────────────
+
+export interface CosAccess {
+  client: S3Client
+  bucketName: string
+  endpoint: string
+  auth: 'trusted-profile' | 'hmac'
+  /** Only set for auth === 'hmac' (needed for presigned URLs). */
+  creds?: HmacCredentials
+}
+
+/**
+ * Resolve how to talk to the bucket behind a project's persistent data store.
+ * Trusted profile first; falls back to the HMAC secret when no trusted profile is
+ * configured or its token exchange fails.
+ */
+export async function resolveCosAccess(
+  projectId: string,
+  region: string,
+  bucketName?: string
+): Promise<CosAccess> {
+  if (isTrustedProfileConfigured()) {
+    try {
+      await getTrustedProfileToken()
+      const target = await resolveCosTarget(projectId, region, bucketName)
+      const client = makeBearerClient(target)
+      // Confirm the profile can actually reach the bucket (needs a COS access policy);
+      // otherwise the HMAC backup below is used.
+      await client.send(new HeadBucketCommand({ Bucket: target.bucketName }))
+      return {
+        client,
+        bucketName: target.bucketName,
+        endpoint: target.endpoint,
+        auth: 'trusted-profile',
+      }
+    } catch (err) {
+      console.warn(
+        `Trusted profile COS access unavailable, falling back to HMAC secret: ` +
+        `${err instanceof Error ? err.message : String(err)}`
+      )
+    }
+  }
+
+  const creds = await resolveCosCredentials(projectId, region, bucketName)
+  return {
+    client: makeClient(creds),
+    bucketName: creds.bucketName,
+    endpoint: creds.endpoint,
+    auth: 'hmac',
+    creds,
+  }
 }
 
 // ── Presigned URL ──────────────────────────────────────────────────────────

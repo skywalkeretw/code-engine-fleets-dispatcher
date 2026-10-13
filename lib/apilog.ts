@@ -55,18 +55,23 @@ export function logCosCall(label: string, method: ApiLogEntry['method'], url: st
 }
 
 /** Log the IAM token exchange (called from iam.ts). */
-export function logIamCall(): void {
+export function logIamCall(source: 'trusted-profile' | 'apikey' = 'apikey'): void {
+  const trusted = source === 'trusted-profile'
   logCall({
     method: 'POST',
     service: 'IAM',
-    label: 'Get IAM access token',
+    label: trusted ? 'Get IAM access token (trusted profile)' : 'Get IAM access token',
     url: 'https://iam.cloud.ibm.com/identity/token',
     curl: `curl -X POST \\
   "https://iam.cloud.ibm.com/identity/token" \\
   -H "Content-Type: application/x-www-form-urlencoded" \\
   -H "Accept: application/json" \\
-  -d "grant_type=urn:ibm:params:oauth:grant-type:apikey" \\
-  -d "apikey=\${IBMCLOUD_API_KEY}" \\
+${trusted
+  ? `  -d "grant_type=urn:ibm:params:oauth:grant-type:cr-token" \\
+  -d "cr_token=$(cat /var/run/secrets/codeengine.cloud.ibm.com/compute-resource-token/token)" \\
+  -d "profile_id=\${TRUSTED_PROFILE_ID}" \\`
+  : `  -d "grant_type=urn:ibm:params:oauth:grant-type:apikey" \\
+  -d "apikey=\${IBMCLOUD_API_KEY}" \\`}
   | jq .access_token -r`,
   })
 }

@@ -16,6 +16,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { resolveCosCredentials, isDemoMode } from '@/lib/ce'
 import { createPresignedPutUrl } from '@/lib/cos'
+import { isTrustedProfileConfigured, getTrustedProfileToken } from '@/lib/iam'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -49,7 +50,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ url: 'https://demo.invalid/presigned-url', bucket: 'demo-bucket', key })
     }
 
-    // Credentials come from the CE project's secret — always private, never public
+    // Trusted profile active: presigned URLs can only be signed with HMAC keys, which this
+    // mode deliberately never reads. 501 makes the browser use the /api/upload route, which
+    // authenticates to COS with the trusted profile's IAM token instead.
+    if (isTrustedProfileConfigured() && await getTrustedProfileToken().then(() => true, () => false)) {
+      return NextResponse.json(
+        { error: 'Presigned URLs are unavailable with trusted profile auth; use /api/upload' },
+        { status: 501 }
+      )
+    }
+
+    // Backup: credentials come from the CE project's HMAC secret — always private, never public
     const creds = await resolveCosCredentials(projectId, region, bucket)
     const url   = await createPresignedPutUrl(creds, creds.bucketName, key, contentType, PRESIGN_EXPIRY_SECONDS)
     return NextResponse.json({ url, bucket: creds.bucketName, key, expiresIn: PRESIGN_EXPIRY_SECONDS })

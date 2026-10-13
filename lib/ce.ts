@@ -2,11 +2,17 @@
  * lib/ce.ts — IBM Code Engine REST client
  *
  * Key design:
- * - IBMCLOUD_API_KEY is the only required env var (set it as a CE secret / env var;
- *   Code Engine does NOT inject it automatically)
+ * - Auth: IAM tokens are obtained via lib/iam.ts.
+ *   Preferred: trusted profile (TRUSTED_PROFILE_ID / TRUSTED_PROFILE_NAME) — Code Engine
+ *   mounts a compute resource token automatically when the app has trusted profiles
+ *   enabled (ibmcloud ce app update --trusted-profiles-enabled=true). No stored credential.
+ *   Backup: IBMCLOUD_API_KEY — set it as a CE secret / env var if no trusted profile is used;
+ *   also used as an automatic fallback if the trusted profile exchange fails.
  * - CE_REGION is injected automatically by Code Engine; restricts to one region
  *   (use CE_REGIONS to override with a comma-separated list for multi-region testing)
- * - COS bucket + cosPrefix are derived from the fleet's own persistent data stores
+ * - COS bucket + cosPrefix are derived from the fleet's own persistent data stores.
+ *   HMAC credentials are retrieved from the CE secret store using the IAM token — no COS
+ *   credential needs to be set in the environment.
  * - DEMO_MODE=true simulates all API calls: real code paths execute, log entries are
  *   generated, but no actual HTTP requests are made — safe without any credentials
  * - Every outbound API call is logged via lib/apilog.ts for the debug panel
@@ -60,6 +66,13 @@ export interface PersistentDataStore {
 export interface HmacCredentials {
   accessKeyId: string
   secretAccessKey: string
+  endpoint: string
+  bucketName: string
+  bucketRegion: string
+}
+
+/** Where a bucket lives — everything needed to address it except the credentials. */
+export interface CosTarget {
   endpoint: string
   bucketName: string
   bucketRegion: string
@@ -306,7 +319,7 @@ export async function listAllProjects(): Promise<CeProject[]> {
 
   if (isDemoMode()) {
     // Log IAM first (would be the first call in a real flow), then CE calls
-    logIamCall()
+    logIamCall('trusted-profile')
     for (const region of regions) {
       logCeGet(`${ceBase(region)}/projects?limit=100`, `List projects (${region})`)
     }
@@ -527,15 +540,14 @@ export async function getHmacCredentials(
 }
 
 /**
- * Resolve COS credentials for a project.
- * Uses the persistent data store whose bucket matches `bucketName` (the bucket the
+ * Find the persistent data store whose bucket matches `bucketName` (the bucket the
  * user picked in the UI). Falls back to the first store only when no bucket is given.
  */
-export async function resolveCosCredentials(
+async function findStore(
   projectId: string,
   region: string,
   bucketName?: string
-): Promise<HmacCredentials> {
+): Promise<PersistentDataStore> {
   const stores = await listPersistentDataStores(projectId, region)
   if (stores.length === 0) {
     throw new Error(`No persistent data stores found in project ${projectId}`)
@@ -544,6 +556,40 @@ export async function resolveCosCredentials(
   if (!store) {
     throw new Error(`No persistent data store in project ${projectId} uses bucket "${bucketName}"`)
   }
+  return store
+}
+
+function cosEndpoint(bucketRegion: string): string {
+  return `https://s3.${bucketRegion}.cloud-object-storage.appdomain.cloud`
+}
+
+/**
+ * Resolve the bucket + endpoint for a project WITHOUT reading the HMAC secret.
+ * Used with an IAM token (trusted profile) to access COS.
+ */
+export async function resolveCosTarget(
+  projectId: string,
+  region: string,
+  bucketName?: string
+): Promise<CosTarget> {
+  const store = await findStore(projectId, region, bucketName)
+  return {
+    endpoint: cosEndpoint(store.bucketRegion),
+    bucketName: store.bucketName,
+    bucketRegion: store.bucketRegion,
+  }
+}
+
+/**
+ * Resolve HMAC COS credentials for a project (backup path, and required for
+ * presigned URLs). Reads the HMAC secret referenced by the persistent data store.
+ */
+export async function resolveCosCredentials(
+  projectId: string,
+  region: string,
+  bucketName?: string
+): Promise<HmacCredentials> {
+  const store = await findStore(projectId, region, bucketName)
 
   return getHmacCredentials(
     projectId, region,

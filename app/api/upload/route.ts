@@ -26,12 +26,13 @@
  */
 
 import type { NextRequest } from 'next/server'
-import { resolveCosCredentials, isDemoMode } from '@/lib/ce'
+import { isDemoMode } from '@/lib/ce'
+import { resolveCosAccess } from '@/lib/cos'
+import type { CosAccess } from '@/lib/cos'
 import { logCosCall } from '@/lib/apilog'
 import Busboy from 'busboy'
 import { PassThrough, Readable } from 'stream'
 import {
-  S3Client,
   PutObjectCommand,
   CreateMultipartUploadCommand,
   UploadPartCommand,
@@ -39,8 +40,6 @@ import {
   AbortMultipartUploadCommand,
   HeadBucketCommand,
 } from '@aws-sdk/client-s3'
-import type { HmacCredentials } from '@/lib/ce'
-
 export const runtime = 'nodejs'
 // Disable Next.js body parsing — we stream it ourselves
 export const dynamic = 'force-dynamic'
@@ -57,25 +56,21 @@ function sseEvent(obj: Record<string, unknown>): Uint8Array {
 // ── COS streaming multipart upload ────────────────────────────────────────────
 
 async function streamToCos(
-  creds: HmacCredentials,
+  access: CosAccess,
   key: string,
   contentType: string,
   readable: PassThrough,
   onPart: (partsDone: number) => void
 ): Promise<void> {
-  const client = new S3Client({
-    region: 'us-east-1',    // required by SDK; IBM COS ignores the value
-    endpoint: creds.endpoint,
-    requestChecksumCalculation: 'WHEN_REQUIRED', // IBM COS rejects the SDK's default CRC32 headers
-    responseChecksumValidation: 'WHEN_REQUIRED',
-    credentials: { accessKeyId: creds.accessKeyId, secretAccessKey: creds.secretAccessKey },
-    forcePathStyle: true,   // IBM COS requires path-style requests
-  })
+  // `access.client` authenticates with the trusted profile's IAM token (preferred) or the
+  // project's HMAC credentials (backup). The bucket is the same either way.
+  const { client } = access
+  const creds = { bucketName: access.bucketName }
 
   // Security assertion: verify the bucket exists and is accessible with these
-  // HMAC credentials before starting the upload. This catches mis-configured
+  // credentials before starting the upload. This catches mis-configured
   // stores early and confirms the bucket is private (public buckets don't
-  // require HMAC auth; if we can reach it with HMAC, it's private).
+  // require authentication; if we can reach it authenticated, it's private).
   await client.send(new HeadBucketCommand({ Bucket: creds.bucketName }))
 
   const init = await client.send(new CreateMultipartUploadCommand({
@@ -231,18 +226,18 @@ export async function POST(req: NextRequest): Promise<Response> {
             }
           })
 
-          resolveCosCredentials(fleetProjectId, fleetRegion, fleetBucket || undefined)
-            .then(creds => {
+          resolveCosAccess(fleetProjectId, fleetRegion, fleetBucket || undefined)
+            .then(access => {
               logCosCall(
-                `Upload ${uploadedFilename} → ${creds.bucketName}/${cosKey}`,
+                `Upload ${uploadedFilename} → ${access.bucketName}/${cosKey} (${access.auth})`,
                 'PUT',
-                `${creds.endpoint}/${creds.bucketName}/${cosKey}`
+                `${access.endpoint}/${access.bucketName}/${cosKey}`
               )
 
               // Estimate number of parts from file size (approximate from content-length)
               const estParts = Math.max(1, Math.ceil(totalFormBytes / PART_SIZE))
 
-              return streamToCos(creds, cosKey, fileContentType, pass, (partsDone) => {
+              return streamToCos(access, cosKey, fileContentType, pass, (partsDone) => {
                 // 50–99%: each completed COS part is one tick
                 emitProgress(Math.min(99, 50 + Math.round((partsDone / estParts) * 49)))
               })
