@@ -1,0 +1,157 @@
+#!/bin/bash
+# ==============================================================================
+# deploy.sh — Deploy the Fleets Dispatcher to IBM Code Engine
+#
+# Uses Code Engine's built-in source-to-image capability — no local Docker
+# build or registry push required.
+#
+# Usage:
+#   ./deploy.sh           — build and create/update the CE application
+#   ./deploy.sh clean     — delete the CE application and its build config
+#
+# Environment variables (all optional — sensible defaults apply):
+#   CE_PROJECT    Code Engine project to deploy into. Default: currently selected project.
+#   CE_REGION     IBM Cloud region.                   Default: currently targeted region.
+#   APP_NAME      CE application name.                Default: fleets-dispatcher
+#   MIN_SCALE     Minimum running instances.          Default: 1
+#   MAX_SCALE     Maximum running instances.          Default: 5
+#   CPU           vCPU per instance.                  Default: 1
+#   MEMORY        Memory per instance.                Default: 4G
+#   VISIBILITY    public | private | project.         Default: public
+# ==============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ── Colours ───────────────────────────────────────────────────────────────────
+
+RED="\033[31m"
+BLUE="\033[94m"
+GREEN="\033[32m"
+ENDCOLOR="\033[0m"
+
+function print_msg    { echo -e "${BLUE}$1${ENDCOLOR}"; }
+function print_success { echo -e "${GREEN}$1${ENDCOLOR}"; }
+function print_error  {
+    echo -e "${RED}\n==========================================${ENDCOLOR}"
+    echo -e "${RED} FAILED${ENDCOLOR}"
+    echo -e "${RED}==========================================\n${ENDCOLOR}"
+    echo -e "${RED}$1${ENDCOLOR}"
+}
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+
+APP_NAME="${APP_NAME:-fleets-dispatcher}"
+MIN_SCALE="${MIN_SCALE:-1}"
+MAX_SCALE="${MAX_SCALE:-5}"
+CPU="${CPU:-1}"
+MEMORY="${MEMORY:-4G}"
+VISIBILITY="${VISIBILITY:-public}"
+
+# ── Clean ─────────────────────────────────────────────────────────────────────
+
+function clean() {
+    print_msg "\nRemoving CE application '${APP_NAME}' and its build config ..."
+
+    if ibmcloud ce app get --name "${APP_NAME}" >/dev/null 2>&1; then
+        ibmcloud ce app delete --name "${APP_NAME}" --force
+        print_success "Application '${APP_NAME}' deleted."
+    else
+        print_msg "Application '${APP_NAME}' not found — nothing to delete."
+    fi
+
+    local build_name="${APP_NAME}-build"
+    if ibmcloud ce build get --name "${build_name}" >/dev/null 2>&1; then
+        ibmcloud ce build delete --name "${build_name}" --force
+        print_success "Build config '${build_name}' deleted."
+    else
+        print_msg "Build config '${build_name}' not found — nothing to delete."
+    fi
+}
+
+if [[ "${1:-}" == "clean" ]]; then
+    clean
+    print_success "\n==========================================\n DONE\n==========================================\n"
+    exit 0
+fi
+
+# ── Prerequisites ─────────────────────────────────────────────────────────────
+
+if ! command -v jq &>/dev/null; then
+    print_error "'jq' is not installed"
+    exit 1
+fi
+
+print_msg "\nEnsuring IBM Cloud CLI code-engine plugin is up to date ..."
+if ! ibmcloud plugin show code-engine -q >/dev/null 2>&1; then
+    ibmcloud plugin install code-engine -f --quiet
+else
+    ibmcloud plugin update code-engine -f --quiet
+fi
+
+# ── Region / Project ──────────────────────────────────────────────────────────
+
+if [[ -n "${CE_REGION:-}" ]]; then
+    print_msg "\nTargeting IBM Cloud region '${CE_REGION}' ..."
+    ibmcloud target -r "${CE_REGION}" --quiet
+fi
+
+if [[ -n "${CE_PROJECT:-}" ]]; then
+    print_msg "\nSelecting Code Engine project '${CE_PROJECT}' ..."
+    ibmcloud ce project select --name "${CE_PROJECT}"
+else
+    current_project=$(ibmcloud ce project current --output json 2>/dev/null | jq -r '.name' 2>/dev/null || true)
+    if [[ -z "${current_project}" || "${current_project}" == "null" ]]; then
+        print_error "No Code Engine project selected and CE_PROJECT is not set.
+  Set CE_PROJECT=<your-project-name> or run:
+    ibmcloud ce project select --name <your-project-name>"
+        exit 1
+    fi
+    print_msg "\nUsing currently selected CE project: '${current_project}'"
+fi
+
+# ── Create or update the CE application (source-to-image) ────────────────────
+# --build-source tells CE to build the image from the Dockerfile in this
+# directory. CE manages the image and registry automatically.
+
+print_msg "\n======================================================"
+print_msg " Deploying application '${APP_NAME}' (source-to-image)"
+print_msg "======================================================\n"
+
+CE_APP_FLAGS=(
+    --name         "${APP_NAME}"
+    --build-source "${SCRIPT_DIR}"
+    --cpu          "${CPU}"
+    --memory       "${MEMORY}"
+    --min-scale    "${MIN_SCALE}"
+    --max-scale    "${MAX_SCALE}"
+    --port         8080
+    --visibility   "${VISIBILITY}"
+    --wait-timeout 600
+)
+
+if ibmcloud ce app get --name "${APP_NAME}" >/dev/null 2>&1; then
+    print_msg "Application '${APP_NAME}' already exists — updating ..."
+    ibmcloud ce app update "${CE_APP_FLAGS[@]}"
+else
+    print_msg "Creating new application '${APP_NAME}' ..."
+    ibmcloud ce app create "${CE_APP_FLAGS[@]}"
+fi
+
+# ── Print the application URL ─────────────────────────────────────────────────
+
+APP_URL=$(ibmcloud ce app get --name "${APP_NAME}" --output json | jq -r '.status.url // empty')
+
+print_success "\n=========================================="
+print_success " SUCCESS"
+print_success "=========================================="
+print_success "\nFleets Dispatcher is deployed and ready."
+print_msg "\n  Application : ${APP_NAME}"
+print_msg "  URL         : ${APP_URL}"
+print_msg "\nTo remove all resources:"
+print_msg "  ./deploy.sh clean"
+print_msg "\nOptional env vars you can set on the app:"
+print_msg "  ibmcloud ce app update --name ${APP_NAME} --env CE_REGION=us-south"
+print_msg "  ibmcloud ce app update --name ${APP_NAME} --env ENABLE_DEBUG=true"
+print_success ""
