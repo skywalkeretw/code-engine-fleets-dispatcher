@@ -1,22 +1,25 @@
 /**
  * app/api/presign/route.ts
  *
- * Issues a time-limited presigned PUT URL so the browser can upload directly
- * to IBM COS without routing bytes through this server.
+ * Issues a time-limited presigned PUT URL so the browser can upload directly to IBM COS
+ * without routing bytes through this server.
+ *
+ * This endpoint is only available in HMAC mode (no trusted profile configured). IAM bearer
+ * tokens cannot sign S3 presigned URLs, so when a trusted profile is active this route
+ * returns HTTP 501 and the browser automatically falls back to /api/upload instead.
  *
  * Security:
- * - HMAC credentials are derived from the CE project's own secret store.
- *   No hardcoded keys, no public bucket access.
+ * - HMAC credentials are read from the CE project's own secret store at runtime.
+ *   No hardcoded keys, no env-var credentials, no public bucket access.
  * - The presigned URL is scoped to a single object key and expires after
- *   PRESIGN_EXPIRY_SECONDS (default 3600 s = 1 h). For large files on slow
- *   connections, increase this value via the env var.
+ *   PRESIGN_EXPIRY_SECONDS (default 3600 s = 1 h).
  */
 
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { resolveCosCredentials, isDemoMode } from '@/lib/ce'
 import { createPresignedPutUrl } from '@/lib/cos'
-import { isTrustedProfileConfigured, getTrustedProfileToken } from '@/lib/iam'
+import { isTrustedProfileConfigured } from '@/lib/iam'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -53,7 +56,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // Trusted profile active: presigned URLs can only be signed with HMAC keys, which this
     // mode deliberately never reads. 501 makes the browser use the /api/upload route, which
     // authenticates to COS with the trusted profile's IAM token instead.
-    if (isTrustedProfileConfigured() && await getTrustedProfileToken().then(() => true, () => false)) {
+    // We only check whether a profile is *configured* — no need to exchange a token here;
+    // if the exchange subsequently fails, resolveCosAccess() will fall back to HMAC anyway.
+    if (isTrustedProfileConfigured()) {
       return NextResponse.json(
         { error: 'Presigned URLs are unavailable with trusted profile auth; use /api/upload' },
         { status: 501 }

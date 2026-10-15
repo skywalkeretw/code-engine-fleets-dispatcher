@@ -1,21 +1,30 @@
 /**
  * lib/iam.ts — IBM Cloud IAM token manager
  *
- * Two ways to obtain a bearer token, tried in this order:
+ * Authentication model
+ * ────────────────────
+ * PRIMARY (Code Engine deployment):
+ *   Trusted profile — no stored credential, no rotation needed.
+ *   Code Engine mounts a compute resource token at the path below when
+ *   --trusted-profiles-enabled=true is set on the application. That token is
+ *   exchanged for an IAM access token of the named/ID'd trusted profile.
+ *   The same IAM token is used for BOTH the Code Engine API and IBM COS.
+ *   Configure: TRUSTED_PROFILE_ID  (preferred, stable)
+ *           or TRUSTED_PROFILE_NAME (alternative)
+ *   Grant type: urn:ibm:params:oauth:grant-type:cr-token
  *
- * 1. Trusted profile (preferred, no stored credential)
- *    Code Engine mounts a compute resource token into the container when
- *    "trusted profiles" is enabled on the application. It is exchanged for an IAM
- *    access token of the trusted profile. Enabled by setting TRUSTED_PROFILE_ID or
- *    TRUSTED_PROFILE_NAME.
- *    grant_type: urn:ibm:params:oauth:grant-type:cr-token
+ * FALLBACK (non-Code-Engine container deployments only):
+ *   API key — used when no trusted profile is configured.
+ *   Configure: IBMCLOUD_API_KEY
+ *   Grant type: urn:ibm:params:oauth:grant-type:apikey
  *
- * 2. API key (backup)
- *    Exchanges IBMCLOUD_API_KEY. Used when no trusted profile is configured, or when
- *    the trusted profile exchange fails and an API key is available.
- *    grant_type: urn:ibm:params:oauth:grant-type:apikey
+ *   The API key fallback is also triggered (with a logged warning) if a trusted
+ *   profile IS configured but the token exchange fails at runtime — this guards
+ *   against misconfiguration silently breaking the app. Both the server log and
+ *   the API debug panel display a "⚠ Trusted profile failed" entry when this
+ *   happens.
  *
- * Tokens are cached per source and refreshed 60s before expiry.
+ * Tokens are cached per source and refreshed 60 s before expiry.
  * Endpoint: POST https://iam.cloud.ibm.com/identity/token
  */
 
@@ -58,7 +67,14 @@ export function getTrustedProfileToken(): Promise<string> {
 }
 
 /**
- * Token for CE API calls: trusted profile first, API key as backup.
+ * Token for all IBM Cloud API calls (CE and COS): trusted profile first, API key as backup.
+ *
+ * On Code Engine with TRUSTED_PROFILE_ID/NAME set this always returns the trusted-profile
+ * token. The API key path is only reached when:
+ *   a) No trusted profile is configured (non-Code-Engine deployment), or
+ *   b) The profile is configured but the token exchange fails at runtime
+ *      (misconfiguration guard — a warning is logged to both the server console
+ *      and the API debug panel so the operator can see it).
  */
 export async function getIamToken(): Promise<string> {
   if (!isTrustedProfileConfigured()) return getToken('apikey')
@@ -67,10 +83,10 @@ export async function getIamToken(): Promise<string> {
     return await getToken('trusted-profile')
   } catch (err) {
     if (!process.env.IBMCLOUD_API_KEY) throw err
-    console.warn(
-      `Trusted profile token exchange failed, falling back to IBMCLOUD_API_KEY: ` +
-      `${err instanceof Error ? err.message : String(err)}`
-    )
+    const msg = err instanceof Error ? err.message : String(err)
+    console.warn(`Trusted profile token exchange failed, falling back to IBMCLOUD_API_KEY: ${msg}`)
+    // Surface the fallback as a visible warning in the API debug panel
+    logIamCall('apikey-fallback')
     return getToken('apikey')
   }
 }
@@ -97,6 +113,11 @@ async function fetchApiKeyToken(): Promise<string> {
   }))
 }
 
+// NOTE: This implements the same IAM cr-token exchange as ContainerAuthenticator from
+// ibm-cloud-sdk-core, without importing that dependency (the dispatcher uses Next.js +
+// AWS SDK v3 and has no other use for the IBM Cloud SDK Core).
+// Reference implementation: trusted-profiles/node/main.js
+// IAM grant type: https://cloud.ibm.com/docs/account?topic=account-iamtoken_from_apikey
 async function fetchTrustedProfileToken(): Promise<string> {
   const profile = trustedProfile()
   if (!profile) throw new Error('TRUSTED_PROFILE_ID or TRUSTED_PROFILE_NAME is not set')

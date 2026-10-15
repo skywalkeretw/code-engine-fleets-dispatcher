@@ -1,11 +1,14 @@
 /**
  * app/api/upload/route.ts
  *
- * Streaming upload endpoint — fallback path when presigned PUT is unavailable.
+ * Streaming upload endpoint — primary upload path when a trusted profile is active
+ * (presigned URLs require HMAC keys and are unavailable in that mode), and fallback
+ * path for HMAC mode when the browser's direct presigned PUT fails.
  *
- * Security: HMAC credentials are derived exclusively from the CE project's own
- * secret store via resolveCosCredentials(). No public URLs, no hardcoded keys.
- * The destination bucket is always private (COS HMAC auth required).
+ * Authentication: resolved by resolveCosAccess() in lib/cos.ts —
+ *   trusted profile active → IAM bearer token (no HMAC keys read)
+ *   no trusted profile     → HMAC credentials from CE project secret store
+ * No hardcoded keys, no public bucket access in either mode.
  *
  * Response format: Server-Sent Events (SSE) streaming newline-delimited JSON.
  * Each event is a JSON object on one line, ending with \n\n.
@@ -231,7 +234,9 @@ export async function POST(req: NextRequest): Promise<Response> {
               logCosCall(
                 `Upload ${uploadedFilename} → ${access.bucketName}/${cosKey} (${access.auth})`,
                 'PUT',
-                `${access.endpoint}/${access.bucketName}/${cosKey}`
+                `${access.endpoint}/${access.bucketName}/${cosKey}`,
+                undefined,
+                access.auth
               )
 
               // Estimate number of parts from file size (approximate from content-length)

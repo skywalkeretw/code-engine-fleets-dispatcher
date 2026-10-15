@@ -1,12 +1,22 @@
 /**
  * lib/cos.ts — IBM COS S3 client
  *
- * Two authentication modes (see resolveCosAccess):
- * - Trusted profile (preferred): requests carry an IAM bearer token obtained via lib/iam.ts.
- *   No HMAC secret is read. Bearer tokens cannot sign presigned URLs, so uploads go
- *   through the server (/api/upload).
- * - HMAC (backup): credentials from the CE project's HMAC secret. Supports presigned
- *   PUT URLs and multipart upload.
+ * Authentication model (mirrors lib/iam.ts):
+ *
+ * PRIMARY (Code Engine deployment):
+ *   Trusted profile — resolveCosAccess() builds a bearer-token S3 client. The IAM token
+ *   is obtained from lib/iam.ts (no HMAC keys read, nothing to rotate). IAM bearer tokens
+ *   cannot sign S3 presigned URLs, so /api/presign returns 501 and uploads always stream
+ *   through /api/upload when a trusted profile is configured.
+ *
+ * FALLBACK (non-Code-Engine container deployments only):
+ *   HMAC credentials — used when NO trusted profile is configured. Credentials are read
+ *   from the CE project's HMAC secret at runtime (not from env vars). Supports both
+ *   presigned PUT URLs and streaming multipart upload.
+ *
+ * The fallback is NOT triggered silently when a trusted profile is configured but fails.
+ * In that case resolveCosAccess() throws, which surfaces the misconfiguration immediately
+ * rather than degrading to a less secure credential mode without the operator knowing.
  */
 
 import {
@@ -84,9 +94,15 @@ export interface CosAccess {
 }
 
 /**
- * Resolve how to talk to the bucket behind a project's persistent data store.
- * Trusted profile first; falls back to the HMAC secret when no trusted profile is
- * configured or its token exchange fails.
+ * Resolve how to authenticate against the COS bucket of a project's persistent data store.
+ *
+ * Trusted profile configured → bearer-token client. Throws if the token exchange or the
+ * HeadBucket check fails — this makes misconfiguration visible immediately rather than
+ * silently degrading to a different credential mode.
+ *
+ * No trusted profile → HMAC client. Credentials are read from the CE project's HMAC secret
+ * at runtime (the env var IBMCLOUD_API_KEY is used only for the CE API call to read that
+ * secret, not for COS).
  */
 export async function resolveCosAccess(
   projectId: string,
@@ -94,27 +110,23 @@ export async function resolveCosAccess(
   bucketName?: string
 ): Promise<CosAccess> {
   if (isTrustedProfileConfigured()) {
-    try {
-      await getTrustedProfileToken()
-      const target = await resolveCosTarget(projectId, region, bucketName)
-      const client = makeBearerClient(target)
-      // Confirm the profile can actually reach the bucket (needs a COS access policy);
-      // otherwise the HMAC backup below is used.
-      await client.send(new HeadBucketCommand({ Bucket: target.bucketName }))
-      return {
-        client,
-        bucketName: target.bucketName,
-        endpoint: target.endpoint,
-        auth: 'trusted-profile',
-      }
-    } catch (err) {
-      console.warn(
-        `Trusted profile COS access unavailable, falling back to HMAC secret: ` +
-        `${err instanceof Error ? err.message : String(err)}`
-      )
+    // Trusted profile is the only auth mode when TRUSTED_PROFILE_ID/NAME is set.
+    // Let any error propagate — the operator must fix the profile configuration.
+    await getTrustedProfileToken()
+    const target = await resolveCosTarget(projectId, region, bucketName)
+    const client = makeBearerClient(target)
+    // HeadBucket confirms the profile's IAM token can reach this specific bucket.
+    // Throws if the COS access policy is missing — fix the trusted profile's IAM roles.
+    await client.send(new HeadBucketCommand({ Bucket: target.bucketName }))
+    return {
+      client,
+      bucketName: target.bucketName,
+      endpoint: target.endpoint,
+      auth: 'trusted-profile',
     }
   }
 
+  // No trusted profile — use HMAC credentials from the CE project's secret store.
   const creds = await resolveCosCredentials(projectId, region, bucketName)
   return {
     client: makeClient(creds),
@@ -141,16 +153,15 @@ export async function createPresignedPutUrl(
 
 // ── Simple PutObject ───────────────────────────────────────────────────────
 
+/** Put a small object. Works with both trusted-profile and HMAC access. */
 export async function putObject(
-  creds: HmacCredentials,
-  bucket: string,
+  access: CosAccess,
   key: string,
   body: Buffer | Uint8Array | string,
   contentType = 'application/octet-stream'
 ): Promise<void> {
-  const client = makeClient(creds)
-  await client.send(new PutObjectCommand({
-    Bucket: bucket,
+  await access.client.send(new PutObjectCommand({
+    Bucket: access.bucketName,
     Key: key,
     Body: typeof body === 'string' ? Buffer.from(body) : body,
     ContentType: contentType,
@@ -159,14 +170,13 @@ export async function putObject(
 
 // ── GetObject ─────────────────────────────────────────────────────────────
 
+/** Get an object. Returns null on NoSuchKey. Works with both trusted-profile and HMAC access. */
 export async function getObject(
-  creds: HmacCredentials,
-  bucket: string,
+  access: CosAccess,
   key: string
 ): Promise<Buffer | null> {
-  const client = makeClient(creds)
   try {
-    const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }))
+    const res = await access.client.send(new GetObjectCommand({ Bucket: access.bucketName, Key: key }))
     if (!res.Body) return null
     const chunks: Uint8Array[] = []
     // @ts-expect-error Body is a Node.js ReadableStream in the S3 SDK
@@ -180,16 +190,15 @@ export async function getObject(
 
 // ── Multipart Upload (streaming from a ReadableStream) ────────────────────
 
+/** Stream a large object to COS. Works with both trusted-profile and HMAC access. */
 export async function multipartUpload(
-  creds: HmacCredentials,
-  bucket: string,
+  access: CosAccess,
   key: string,
   stream: ReadableStream<Uint8Array>,
   contentType = 'application/octet-stream'
 ): Promise<void> {
-  const client = makeClient(creds)
-  const init = await client.send(new CreateMultipartUploadCommand({
-    Bucket: bucket, Key: key, ContentType: contentType,
+  const init = await access.client.send(new CreateMultipartUploadCommand({
+    Bucket: access.bucketName, Key: key, ContentType: contentType,
   }))
   const uploadId = init.UploadId!
 
@@ -207,8 +216,8 @@ export async function multipartUpload(
       while (buffer.length >= PART_SIZE || (done && buffer.length > 0)) {
         const slice = buffer.slice(0, Math.min(PART_SIZE, buffer.length))
         buffer = buffer.slice(slice.length)
-        const part = await client.send(new UploadPartCommand({
-          Bucket: bucket, Key: key, UploadId: uploadId,
+        const part = await access.client.send(new UploadPartCommand({
+          Bucket: access.bucketName, Key: key, UploadId: uploadId,
           PartNumber: partNumber, Body: slice,
         }))
         parts.push({ PartNumber: partNumber, ETag: part.ETag! })
@@ -218,13 +227,13 @@ export async function multipartUpload(
       if (done) break
     }
 
-    await client.send(new CompleteMultipartUploadCommand({
-      Bucket: bucket, Key: key, UploadId: uploadId,
+    await access.client.send(new CompleteMultipartUploadCommand({
+      Bucket: access.bucketName, Key: key, UploadId: uploadId,
       MultipartUpload: { Parts: parts },
     }))
   } catch (err) {
-    await client.send(new AbortMultipartUploadCommand({
-      Bucket: bucket, Key: key, UploadId: uploadId,
+    await access.client.send(new AbortMultipartUploadCommand({
+      Bucket: access.bucketName, Key: key, UploadId: uploadId,
     })).catch(() => {})
     throw err
   }

@@ -43,35 +43,62 @@ export function logCall(input: LogCallInput): void {
   }
 }
 
-/** Log a COS presign or upload call from a route handler. */
-export function logCosCall(label: string, method: ApiLogEntry['method'], url: string, extra?: string): void {
+/** Log a COS presign or upload call from a route handler.
+ *  auth: 'hmac' (default) uses AWS4-HMAC-SHA256; 'trusted-profile' uses Bearer token.
+ */
+export function logCosCall(
+  label: string,
+  method: ApiLogEntry['method'],
+  url: string,
+  extra?: string,
+  auth: 'hmac' | 'trusted-profile' = 'hmac'
+): void {
+  const authHeader = auth === 'trusted-profile'
+    ? '-H "Authorization: Bearer $TOKEN"'
+    : '-H "Authorization: AWS4-HMAC-SHA256 ..."'
   logCall({
     method,
     service: 'COS',
     label,
     url,
-    curl: `curl -X ${method} \\\n  "${url}" \\\n  -H "Authorization: AWS4-HMAC-SHA256 ..."${extra ? ` \\\n  ${extra}` : ''}`,
+    curl: `curl -X ${method} \\\n  "${url}" \\\n  ${authHeader}${extra ? ` \\\n  ${extra}` : ''}`,
   })
 }
 
-/** Log the IAM token exchange (called from iam.ts). */
-export function logIamCall(source: 'trusted-profile' | 'apikey' = 'apikey'): void {
+/**
+ * Log an IAM event (called from iam.ts).
+ * - 'trusted-profile' : cr-token exchange succeeded
+ * - 'apikey'          : API key exchange (no trusted profile configured)
+ * - 'apikey-fallback' : trusted profile failed; falling back to API key (visible warning in debug panel)
+ */
+export function logIamCall(source: 'trusted-profile' | 'apikey' | 'apikey-fallback' = 'apikey'): void {
   const trusted = source === 'trusted-profile'
+  const fallback = source === 'apikey-fallback'
+
   logCall({
     method: 'POST',
     service: 'IAM',
-    label: trusted ? 'Get IAM access token (trusted profile)' : 'Get IAM access token',
+    label: trusted
+      ? 'Get IAM access token (trusted profile)'
+      : fallback
+        ? '⚠ Trusted profile failed — falling back to API key'
+        : 'Get IAM access token (API key)',
     url: 'https://iam.cloud.ibm.com/identity/token',
-    curl: `curl -X POST \\
+    curl: trusted
+      ? `curl -X POST \\
   "https://iam.cloud.ibm.com/identity/token" \\
   -H "Content-Type: application/x-www-form-urlencoded" \\
   -H "Accept: application/json" \\
-${trusted
-  ? `  -d "grant_type=urn:ibm:params:oauth:grant-type:cr-token" \\
+  -d "grant_type=urn:ibm:params:oauth:grant-type:cr-token" \\
   -d "cr_token=$(cat /var/run/secrets/codeengine.cloud.ibm.com/compute-resource-token/token)" \\
-  -d "profile_id=\${TRUSTED_PROFILE_ID}" \\`
-  : `  -d "grant_type=urn:ibm:params:oauth:grant-type:apikey" \\
-  -d "apikey=\${IBMCLOUD_API_KEY}" \\`}
+  -d "profile_id=\${TRUSTED_PROFILE_ID}" \\
+  | jq .access_token -r`
+      : `curl -X POST \\
+  "https://iam.cloud.ibm.com/identity/token" \\
+  -H "Content-Type: application/x-www-form-urlencoded" \\
+  -H "Accept: application/json" \\
+  -d "grant_type=urn:ibm:params:oauth:grant-type:apikey" \\
+  -d "apikey=\${IBMCLOUD_API_KEY}" \\
   | jq .access_token -r`,
   })
 }
